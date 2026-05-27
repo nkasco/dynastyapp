@@ -32,17 +32,18 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
 
   **Milestone M0: Project Brain Exists**
 
-- [ ] Phase 1: App foundation
-  - [ ] Scaffold Next.js 16, React 19, TypeScript 5, and `pnpm`.
-  - [ ] Configure App Router project structure.
-  - [ ] Add Tailwind CSS 4.
-  - [ ] Initialize shadcn/ui with the `new-york` style.
-  - [ ] Add base layout, global CSS, app shell, and theme tokens.
-  - [ ] Add lucide-react, Sonner, TanStack Query, TanStack Table, React Hook Form, Zod, and Recharts/shadcn charts.
-  - [ ] Add lint, typecheck, test, and dev scripts.
-  - [ ] Add environment validation for auth, database, and import settings.
+- [x] Phase 1: App foundation
+  - [x] Scaffold Next.js 16, React 19, TypeScript 5, and `pnpm`.
+  - [x] Configure App Router project structure.
+  - [x] Add Tailwind CSS 4.
+  - [x] Initialize shadcn/ui with the `new-york` style.
+  - [x] Add base layout, global CSS, app shell, and theme tokens.
+  - [x] Add lucide-react, Sonner, TanStack Query, TanStack Table, React Hook Form, Zod, and Recharts/shadcn charts.
+  - [x] Add lint, typecheck, test, and dev scripts.
+  - [x] Add environment validation for auth, database, and import settings.
+  - [x] Confirm the running app before declaring M1.
 
-  **Milestone M1: App Boots**
+  **Milestone M1: App Boots** ✅
 
 - [ ] Phase 2: Database and migrations
   - [ ] Add Drizzle ORM and `drizzle-kit`.
