@@ -55,17 +55,17 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
   - [x] Add seed/dev bootstrap for first admin and invite codes.
   - [x] Document that schema changes require Drizzle migrations.
 
-- [ ] Phase 3: Authentication
-  - [ ] Configure NextAuth/Auth.js route handlers.
-  - [ ] Add GitHub provider.
-  - [ ] Add Discord provider.
-  - [ ] Add invite-gated local credentials provider.
-  - [ ] Hash local passwords with Argon2id.
-  - [ ] Add session helpers and protected route utilities.
-  - [ ] Add custom sign-in UI using shadcn components.
-  - [ ] Add first-admin bootstrap and friend invite flow.
+- [x] Phase 3: Authentication
+  - [x] Configure NextAuth/Auth.js route handlers.
+  - [x] Add GitHub provider.
+  - [x] Add Discord provider.
+  - [x] Add invite-gated local credentials provider.
+  - [x] Hash local passwords with Argon2id.
+  - [x] Add session helpers and protected route utilities.
+  - [x] Add custom sign-in UI using shadcn components.
+  - [x] Add first-admin bootstrap and friend invite flow.
 
-  **Milestone M2: Private Login Works**
+  **Milestone M2: Private Login Works** ✅
 
 - [ ] Phase 4: API and service boundary
   - [ ] Create Zod schemas for request and response shapes.

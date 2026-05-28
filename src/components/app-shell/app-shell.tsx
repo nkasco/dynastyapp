@@ -1,6 +1,9 @@
-import { BarChart3, FlaskConical, Search, Users } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, FlaskConical, LogOut, Search, TicketPlus, Users } from "lucide-react";
 
+import { signOutCurrentUser } from "@/server/auth/actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { label: "Players", icon: Search },
@@ -9,7 +12,17 @@ const navItems = [
   { label: "Reports", icon: BarChart3 },
 ];
 
-export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
+export function AppShell({
+  children,
+  user,
+}: Readonly<{
+  children: React.ReactNode;
+  user?: {
+    name?: string | null;
+    email?: string | null;
+    role?: "admin" | "member";
+  };
+}>) {
   return (
     <div className="min-h-dvh bg-background">
       <header className="sticky top-0 z-20 border-b border-border/75 bg-background/88 backdrop-blur">
@@ -34,10 +47,28 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
                 {item.label}
               </a>
             ))}
+            {user?.role === "admin" ? (
+              <Link
+                href="/invites"
+                className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors"
+              >
+                <TicketPlus className="size-4" aria-hidden="true" />
+                Invites
+              </Link>
+            ) : null}
           </nav>
-          <Badge variant="secondary" className="hidden sm:inline-flex">
-            Local first
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="hidden sm:inline-flex">
+              {user?.name || user?.email || "Local first"}
+            </Badge>
+            {user ? (
+              <form action={signOutCurrentUser}>
+                <Button type="submit" variant="ghost" size="icon" aria-label="Sign out">
+                  <LogOut className="size-4" aria-hidden="true" />
+                </Button>
+              </form>
+            ) : null}
+          </div>
         </div>
       </header>
       <div className="flex min-h-[calc(100dvh-3.5rem)]">{children}</div>

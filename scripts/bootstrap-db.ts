@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
+import { hashPassword } from "@/server/auth/passwords";
 import { appSettings, inviteCodes, localCredentials, users } from "@/server/db/schema";
 
 const now = () => new Date();
@@ -15,7 +16,8 @@ function hashInviteCode(code: string) {
 
 async function bootstrapAdmin() {
   const email = process.env.FIRST_ADMIN_EMAIL?.trim().toLowerCase();
-  const passwordHash = process.env.FIRST_ADMIN_PASSWORD_HASH?.trim();
+  const password = process.env.FIRST_ADMIN_PASSWORD?.trim();
+  const passwordHash = process.env.FIRST_ADMIN_PASSWORD_HASH?.trim() ?? (password ? await hashPassword(password) : undefined);
   const name = process.env.FIRST_ADMIN_NAME?.trim() || "League Admin";
 
   if (!email) {

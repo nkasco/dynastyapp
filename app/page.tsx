@@ -3,6 +3,7 @@ import { Activity, ArrowUpRight, Database, LockKeyhole, Moon, RefreshCw, ShieldC
 import { AppShell } from "@/components/app-shell/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { requireUser } from "@/server/auth/session";
 
 const foundationItems = [
   {
@@ -30,9 +31,11 @@ const signalRows = [
   ["Bootstrap", "Admin and invite seed path ready"],
 ];
 
-export default function Home() {
+export default async function Home() {
+  const user = await requireUser();
+
   return (
-    <AppShell>
+    <AppShell user={user}>
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-5 py-6 sm:px-8 lg:px-10">
         <section className="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] lg:items-end">
           <div className="space-y-6">
