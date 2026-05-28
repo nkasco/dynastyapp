@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { BarChart3, FlaskConical, LogOut, Search, TicketPlus, Users } from "lucide-react";
 
-import { signOutCurrentUser } from "@/server/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -14,6 +13,7 @@ const navItems = [
 
 export function AppShell({
   children,
+  signOutAction,
   user,
 }: Readonly<{
   children: React.ReactNode;
@@ -22,6 +22,7 @@ export function AppShell({
     email?: string | null;
     role?: "admin" | "member";
   };
+  signOutAction?: () => Promise<void>;
 }>) {
   return (
     <div className="min-h-dvh bg-background">
@@ -61,8 +62,8 @@ export function AppShell({
             <Badge variant="secondary" className="hidden sm:inline-flex">
               {user?.name || user?.email || "Local first"}
             </Badge>
-            {user ? (
-              <form action={signOutCurrentUser}>
+            {user && signOutAction ? (
+              <form action={signOutAction}>
                 <Button type="submit" variant="ghost" size="icon" aria-label="Sign out">
                   <LogOut className="size-4" aria-hidden="true" />
                 </Button>

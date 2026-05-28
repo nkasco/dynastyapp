@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell/app-shell";
+import { signOutCurrentUser } from "@/server/auth/actions";
 import { requireUser } from "@/server/auth/session";
 
 export default async function ProtectedAppLayout({
@@ -8,6 +9,9 @@ export default async function ProtectedAppLayout({
 }>) {
   const user = await requireUser();
 
-  return <AppShell user={user}>{children}</AppShell>;
+  return (
+    <AppShell user={user} signOutAction={signOutCurrentUser}>
+      {children}
+    </AppShell>
+  );
 }
-

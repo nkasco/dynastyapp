@@ -2,6 +2,7 @@ import { desc } from "drizzle-orm";
 
 import { InviteForm } from "@/components/auth/invite-form";
 import { Badge } from "@/components/ui/badge";
+import { createInvite } from "@/server/auth/actions";
 import { db } from "@/server/db/client";
 import { inviteCodes } from "@/server/db/schema";
 import { requireAdmin } from "@/server/auth/session";
@@ -38,7 +39,7 @@ export default async function InvitesPage({
       </header>
 
       <section className="grid gap-5 lg:grid-cols-[360px_1fr]">
-        <InviteForm />
+        <InviteForm createInviteAction={createInvite} />
         <div className="rounded-lg border border-border/80 bg-card p-2 shadow-xs">
           {invites.length ? (
             invites.map((invite) => (

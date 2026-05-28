@@ -3,26 +3,36 @@
 import { Github, KeyRound, Mail, MessageCircle, ShieldCheck } from "lucide-react";
 import { useActionState } from "react";
 
-import {
-  createAccountWithInvite,
-  signInWithDiscord,
-  signInWithGitHub,
-  signInWithPassword,
-} from "@/server/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+type FormAction = (previousState: string | null | undefined, formData: FormData) => Promise<string | null | undefined>;
+type ProviderAction = () => Promise<void>;
 
 type AuthFormsProps = {
   githubEnabled: boolean;
   discordEnabled: boolean;
   localEnabled: boolean;
   registered: boolean;
+  createAccountWithInviteAction: FormAction;
+  signInWithDiscordAction: ProviderAction;
+  signInWithGitHubAction: ProviderAction;
+  signInWithPasswordAction: FormAction;
 };
 
-export function AuthForms({ githubEnabled, discordEnabled, localEnabled, registered }: AuthFormsProps) {
-  const [signInError, signInAction, signingIn] = useActionState(signInWithPassword, null);
-  const [registerError, registerAction, registering] = useActionState(createAccountWithInvite, null);
+export function AuthForms({
+  createAccountWithInviteAction,
+  discordEnabled,
+  githubEnabled,
+  localEnabled,
+  registered,
+  signInWithDiscordAction,
+  signInWithGitHubAction,
+  signInWithPasswordAction,
+}: AuthFormsProps) {
+  const [signInError, signInAction, signingIn] = useActionState(signInWithPasswordAction, null);
+  const [registerError, registerAction, registering] = useActionState(createAccountWithInviteAction, null);
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -62,8 +72,8 @@ export function AuthForms({ githubEnabled, discordEnabled, localEnabled, registe
         )}
 
         <div className="mt-5 grid gap-2">
-          {githubEnabled ? <ProviderButton action={signInWithGitHub} label="Continue with GitHub" icon="github" /> : null}
-          {discordEnabled ? <ProviderButton action={signInWithDiscord} label="Continue with Discord" icon="discord" /> : null}
+          {githubEnabled ? <ProviderButton action={signInWithGitHubAction} label="Continue with GitHub" icon="github" /> : null}
+          {discordEnabled ? <ProviderButton action={signInWithDiscordAction} label="Continue with Discord" icon="discord" /> : null}
         </div>
       </section>
 

@@ -12,7 +12,7 @@ function ensureFileDatabaseDirectory(databaseUrl: string) {
   }
 
   const filePath = databaseUrl.replace(/^file:/, "");
-  mkdirSync(dirname(resolve(process.cwd(), filePath)), { recursive: true });
+  mkdirSync(dirname(resolve(/* turbopackIgnore: true */ process.cwd(), filePath)), { recursive: true });
 }
 
 ensureFileDatabaseDirectory(env.DATABASE_URL);

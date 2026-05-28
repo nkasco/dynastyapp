@@ -3,6 +3,7 @@ import { Activity, ArrowUpRight, Database, LockKeyhole, Moon, RefreshCw, ShieldC
 import { AppShell } from "@/components/app-shell/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { signOutCurrentUser } from "@/server/auth/actions";
 import { requireUser } from "@/server/auth/session";
 
 const foundationItems = [
@@ -26,21 +27,21 @@ const foundationItems = [
 const signalRows = [
   ["Runtime", "Next.js 16 App Router"],
   ["Interface", "Tailwind 4 + shadcn/new-york tokens"],
+  ["Internal API", "Zod contracts + typed envelopes"],
   ["Database", "Drizzle + SQLite/libSQL"],
-  ["Migrations", "drizzle-kit generated"],
-  ["Bootstrap", "Admin and invite seed path ready"],
+  ["Boundary", "UI components stay server-clean"],
 ];
 
 export default async function Home() {
   const user = await requireUser();
 
   return (
-    <AppShell user={user}>
+    <AppShell user={user} signOutAction={signOutCurrentUser}>
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-5 py-6 sm:px-8 lg:px-10">
         <section className="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] lg:items-end">
           <div className="space-y-6">
             <Badge variant="outline" className="border-accent/35 bg-accent/10 text-accent-foreground">
-              Database foundation online
+              API boundary online
             </Badge>
             <div className="max-w-3xl space-y-4">
               <h1 className="text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
@@ -95,16 +96,16 @@ export default async function Home() {
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Activity className="text-accent size-4" aria-hidden="true" />
-              Phase 2 status
+              Phase 4 status
             </div>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              The storage layer is ready without pretending imported data exists yet: auth tables, league and roster context, player identity, stats, picks, transactions, source snapshots, and import observability are all migration-backed.
+              The private API now has shared contracts, guarded route handlers, typed client calls, service modules, and import-job status envelopes without letting UI components reach into server-only code.
             </p>
           </div>
           <div className="grid gap-2 rounded-lg border border-dashed border-border/90 p-3 text-sm">
             <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
               <span className="text-muted-foreground">Next milestone</span>
-              <span className="font-medium">Invite-gated private login</span>
+              <span className="font-medium">Nightly imports observable</span>
             </div>
             <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
               <span className="text-muted-foreground">Refresh target</span>

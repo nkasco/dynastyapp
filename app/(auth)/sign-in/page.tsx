@@ -5,6 +5,12 @@ import { auth } from "@/auth";
 import { AuthForms } from "@/components/auth/auth-forms";
 import { Badge } from "@/components/ui/badge";
 import { env } from "@/env";
+import {
+  createAccountWithInvite,
+  signInWithDiscord,
+  signInWithGitHub,
+  signInWithPassword,
+} from "@/server/auth/actions";
 
 export default async function SignInPage({
   searchParams,
@@ -48,6 +54,10 @@ export default async function SignInPage({
           discordEnabled={Boolean(env.AUTH_DISCORD_ID && env.AUTH_DISCORD_SECRET)}
           localEnabled={env.LOCAL_AUTH_ENABLED}
           registered={params.registered === "1"}
+          createAccountWithInviteAction={createAccountWithInvite}
+          signInWithDiscordAction={signInWithDiscord}
+          signInWithGitHubAction={signInWithGitHub}
+          signInWithPasswordAction={signInWithPassword}
         />
       </div>
     </main>

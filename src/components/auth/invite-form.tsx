@@ -3,13 +3,14 @@
 import { TicketPlus } from "lucide-react";
 import { useActionState } from "react";
 
-import { createInvite } from "@/server/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function InviteForm() {
-  const [error, action, pending] = useActionState(createInvite, null);
+type InviteAction = (previousState: string | null | undefined, formData: FormData) => Promise<string | null | undefined>;
+
+export function InviteForm({ createInviteAction }: { createInviteAction: InviteAction }) {
+  const [error, action, pending] = useActionState(createInviteAction, null);
 
   return (
     <form action={action} className="grid gap-4 rounded-lg border border-border/80 bg-card p-5 shadow-xs">
@@ -56,4 +57,3 @@ export function InviteForm() {
     </form>
   );
 }
-

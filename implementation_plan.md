@@ -67,17 +67,17 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
 
   **Milestone M2: Private Login Works** ✅
 
-- [ ] Phase 4: API and service boundary
-  - [ ] Create Zod schemas for request and response shapes.
-  - [ ] Create server services for database, auth, Sleeper, nflverse, imports, and analytics.
-  - [ ] Add typed client-side API wrapper.
-  - [ ] Add consistent API error envelopes.
-  - [ ] Add auth guards for private API routes.
-  - [ ] Add pagination, filters, and sorting conventions.
-  - [ ] Add import-job status responses.
-  - [ ] Ensure UI code never imports server-only modules.
+- [x] Phase 4: API and service boundary
+  - [x] Create Zod schemas for request and response shapes.
+  - [x] Create server services for database, auth, Sleeper, nflverse, imports, and analytics.
+  - [x] Add typed client-side API wrapper.
+  - [x] Add consistent API error envelopes.
+  - [x] Add auth guards for private API routes.
+  - [x] Add pagination, filters, and sorting conventions.
+  - [x] Add import-job status responses.
+  - [x] Ensure UI code never imports server-only modules.
 
-  **Milestone M3: API Boundary Works**
+  **Milestone M3: API Boundary Works** ✅
 
 - [ ] Phase 5: Server-side refresh jobs
   - [ ] Add server-side refresh runner.
