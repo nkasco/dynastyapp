@@ -45,15 +45,15 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
 
   **Milestone M1: App Boots** ✅
 
-- [ ] Phase 2: Database and migrations
-  - [ ] Add Drizzle ORM and `drizzle-kit`.
-  - [ ] Configure SQLite/libSQL file database.
-  - [ ] Add Drizzle config and migration scripts.
-  - [ ] Create auth tables.
-  - [ ] Create league, roster, player, pick, matchup, transaction, stat, import, and snapshot tables.
-  - [ ] Add indexes for player search, league lookup, roster joins, and stat queries.
-  - [ ] Add seed/dev bootstrap for first admin and invite codes.
-  - [ ] Document that schema changes require Drizzle migrations.
+- [x] Phase 2: Database and migrations
+  - [x] Add Drizzle ORM and `drizzle-kit`.
+  - [x] Configure SQLite/libSQL file database.
+  - [x] Add Drizzle config and migration scripts.
+  - [x] Create auth tables.
+  - [x] Create league, roster, player, pick, matchup, transaction, stat, import, and snapshot tables.
+  - [x] Add indexes for player search, league lookup, roster joins, and stat queries.
+  - [x] Add seed/dev bootstrap for first admin and invite codes.
+  - [x] Document that schema changes require Drizzle migrations.
 
 - [ ] Phase 3: Authentication
   - [ ] Configure NextAuth/Auth.js route handlers.

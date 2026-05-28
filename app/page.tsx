@@ -12,12 +12,12 @@ const foundationItems = [
   },
   {
     title: "Local-first data",
-    detail: "SQLite is pointed at ./data/dynasty.db for development, ready for a mounted volume later.",
+    detail: "Drizzle owns the SQLite schema and migrations at ./data/dynasty.db.",
     icon: Database,
   },
   {
     title: "Observable imports",
-    detail: "Nightly refresh settings are validated now so ingestion can grow without surprise config drift.",
+    detail: "Import jobs, locks, snapshots, warning queue, and freshness fields are ready for ingestion.",
     icon: RefreshCw,
   },
 ];
@@ -25,9 +25,9 @@ const foundationItems = [
 const signalRows = [
   ["Runtime", "Next.js 16 App Router"],
   ["Interface", "Tailwind 4 + shadcn/new-york tokens"],
-  ["Client state", "TanStack Query ready"],
-  ["Forms", "React Hook Form + Zod ready"],
-  ["Charts", "Recharts + shadcn chart primitives ready"],
+  ["Database", "Drizzle + SQLite/libSQL"],
+  ["Migrations", "drizzle-kit generated"],
+  ["Bootstrap", "Admin and invite seed path ready"],
 ];
 
 export default function Home() {
@@ -37,7 +37,7 @@ export default function Home() {
         <section className="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] lg:items-end">
           <div className="space-y-6">
             <Badge variant="outline" className="border-accent/35 bg-accent/10 text-accent-foreground">
-              App foundation online
+              Database foundation online
             </Badge>
             <div className="max-w-3xl space-y-4">
               <h1 className="text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
@@ -92,16 +92,16 @@ export default function Home() {
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Activity className="text-accent size-4" aria-hidden="true" />
-              Phase 1 status
+              Phase 2 status
             </div>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              The shell is intentionally quiet for now: enough structure to prove the app boots, enough visual language to avoid generic dashboard sprawl, and no fake analytics before imports exist.
+              The storage layer is ready without pretending imported data exists yet: auth tables, league and roster context, player identity, stats, picks, transactions, source snapshots, and import observability are all migration-backed.
             </p>
           </div>
           <div className="grid gap-2 rounded-lg border border-dashed border-border/90 p-3 text-sm">
             <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
               <span className="text-muted-foreground">Next milestone</span>
-              <span className="font-medium">Drizzle schema and migrations</span>
+              <span className="font-medium">Invite-gated private login</span>
             </div>
             <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
               <span className="text-muted-foreground">Refresh target</span>
