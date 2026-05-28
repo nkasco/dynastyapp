@@ -3,7 +3,6 @@ import Credentials from "next-auth/providers/credentials";
 import Discord from "next-auth/providers/discord";
 import GitHub from "next-auth/providers/github";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { env } from "@/env";
@@ -80,28 +79,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return true;
       }
 
-      if (!user.email) {
-        return false;
-      }
-
-      const existing = await db.query.users.findFirst({
-        where: eq(users.email, user.email.toLowerCase()),
-      });
-
-      return Boolean(existing);
+      return Boolean(user.email);
     },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.role = user.role ?? "member";
-      }
-
-      if (!token.role && token.email) {
-        const currentUser = await db.query.users.findFirst({
-          where: eq(users.email, token.email.toLowerCase()),
-        });
-        token.id = currentUser?.id;
-        token.role = currentUser?.role ?? "member";
       }
 
       return token;

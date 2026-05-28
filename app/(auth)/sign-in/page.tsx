@@ -38,7 +38,7 @@ export default async function SignInPage({
             </Badge>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Sign in before the trade window closes.</h1>
             <p className="text-sm leading-6 text-muted-foreground sm:text-base">
-              Local accounts are invite-only. GitHub and Discord are available for already-invited emails.
+              Local accounts are invite-only. GitHub and Discord can create a member account when the provider returns an email.
             </p>
           </div>
         </header>
@@ -53,4 +53,3 @@ export default async function SignInPage({
     </main>
   );
 }
-
