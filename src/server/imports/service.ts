@@ -1,13 +1,12 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
-
 import { eq } from "drizzle-orm";
 
 import type { CreateNflverseImportRequest, CreateSleeperImportRequest } from "@/contracts/imports";
 import { db } from "@/server/db/client";
 import { importJobs, type NewImportJob } from "@/server/db/schema";
 import { ApiError } from "@/server/api/errors";
+import { createIdempotentImportJob, runNightlyRefresh, runQueuedImportJobs } from "@/server/imports/runner";
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
@@ -33,25 +32,7 @@ function mapImportJob(row: typeof importJobs.$inferSelect) {
 }
 
 export async function createImportJob(input: Omit<NewImportJob, "id" | "status" | "createdAt" | "updatedAt">) {
-  const now = new Date();
-  const job = {
-    id: randomUUID(),
-    status: "queued" as const,
-    error: null,
-    leagueId: null,
-    metadata: null,
-    scope: null,
-    season: null,
-    startedAt: null,
-    endedAt: null,
-    counts: null,
-    week: null,
-    createdAt: now,
-    updatedAt: now,
-    ...input,
-  };
-
-  await db.insert(importJobs).values(job);
+  const job = await createIdempotentImportJob(input);
   return mapImportJob(job);
 }
 
@@ -83,4 +64,19 @@ export async function getImportJob(id: string) {
   }
 
   return mapImportJob(row);
+}
+
+export async function runQueuedImports() {
+  const jobs = await runQueuedImportJobs();
+  return jobs.flatMap((job) => (job ? [mapImportJob(job)] : []));
+}
+
+export async function triggerNightlyRefresh() {
+  const job = await runNightlyRefresh();
+
+  if (!job) {
+    throw new ApiError("INTERNAL_ERROR", "Nightly refresh did not return an import job.");
+  }
+
+  return mapImportJob(job);
 }

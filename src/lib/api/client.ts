@@ -5,6 +5,7 @@ import {
   createSleeperImportRequestSchema,
   evaluateTradeRequestSchema,
   importJobResponseSchema,
+  importJobsResponseSchema,
   leagueResponseSchema,
   leaguesResponseSchema,
   linkLeagueRequestSchema,
@@ -90,6 +91,14 @@ export const apiClient = {
     apiFetch("/api/imports/nflverse", importJobResponseSchema, {
       method: "POST",
       body: body(createNflverseImportRequestSchema, input),
+    }),
+  runQueuedImports: () =>
+    apiFetch("/api/imports/run", importJobsResponseSchema, {
+      method: "POST",
+    }),
+  triggerNightlyRefresh: () =>
+    apiFetch("/api/imports/refresh", importJobResponseSchema, {
+      method: "POST",
     }),
   importJob: (id: string) => apiFetch(`/api/imports/${encodeURIComponent(id)}`, importJobResponseSchema),
   evaluateTrade: (input: EvaluateTradeRequest) =>

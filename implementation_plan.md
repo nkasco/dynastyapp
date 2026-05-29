@@ -79,17 +79,17 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
 
   **Milestone M3: API Boundary Works** ✅
 
-- [ ] Phase 5: Server-side refresh jobs
-  - [ ] Add server-side refresh runner.
-  - [ ] Schedule refresh around `1:00 AM America/New_York`.
-  - [ ] Make the job safe to run manually.
-  - [ ] Make the job idempotent per source, league, season, and week.
-  - [ ] Add import locks.
-  - [ ] Record start time, end time, source, status, counts, warnings, and failures.
-  - [ ] Add retry/backoff for temporary source failures.
-  - [ ] Prepare Docker-friendly cron or worker execution.
+- [x] Phase 5: Server-side refresh jobs
+  - [x] Add server-side refresh runner.
+  - [x] Schedule refresh around `1:00 AM America/New_York`.
+  - [x] Make the job safe to run manually.
+  - [x] Make the job idempotent per source, league, season, and week.
+  - [x] Add import locks.
+  - [x] Record start time, end time, source, status, counts, warnings, and failures.
+  - [x] Add retry/backoff for temporary source failures.
+  - [x] Prepare Docker-friendly cron or worker execution.
 
-  **Milestone M4: Nightly Imports Observable**
+  **Milestone M4: Nightly Imports Observable** ✅
 
 - [ ] Phase 6: Sleeper ingestion
   - [ ] Build read-only Sleeper API client.

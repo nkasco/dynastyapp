@@ -34,7 +34,9 @@ export const importJobSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const importJobsSchema = z.array(importJobSchema);
 export const importJobResponseSchema = apiResponseSchema(importJobSchema);
+export const importJobsResponseSchema = apiResponseSchema(importJobsSchema);
 
 export type ImportJobDto = z.infer<typeof importJobSchema>;
 export type CreateSleeperImportRequest = z.infer<typeof createSleeperImportRequestSchema>;
