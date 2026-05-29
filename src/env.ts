@@ -10,7 +10,7 @@ const emptyToUndefined = (value: unknown) => (value === "" ? undefined : value);
 const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    NEXT_PUBLIC_APP_NAME: z.string().min(1).default("Dynasty Command Center"),
+    NEXT_PUBLIC_APP_NAME: z.string().min(1).default("Dynalytics"),
 
     AUTH_SECRET: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
     AUTH_GITHUB_ID: z.preprocess(emptyToUndefined, z.string().optional()),
@@ -19,8 +19,8 @@ const envSchema = z
     AUTH_DISCORD_SECRET: z.preprocess(emptyToUndefined, z.string().optional()),
     LOCAL_AUTH_ENABLED: booleanString.default(true),
 
-    DATABASE_URL: z.string().min(1).default("file:./data/dynasty.db"),
-    DATABASE_PATH: z.string().min(1).default("./data/dynasty.db"),
+    DATABASE_URL: z.string().min(1).default("file:./data/dynalytics.db"),
+    DATABASE_PATH: z.string().min(1).default("./data/dynalytics.db"),
 
     IMPORT_TIME_ZONE: z.string().min(1).default("America/New_York"),
     IMPORT_NIGHTLY_CRON: z.string().min(1).default("0 1 * * *"),

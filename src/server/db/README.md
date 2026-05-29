@@ -1,6 +1,6 @@
 # Database Layer
 
-Phase 2 uses Drizzle ORM with a local SQLite/libSQL file database. The default development URL is `file:./data/dynasty.db`.
+Phase 2 uses Drizzle ORM with a local SQLite/libSQL file database. The default development URL is `file:./data/dynalytics.db`.
 
 Schema changes must be made in `src/server/db/schema.ts`, then captured with a Drizzle migration:
 

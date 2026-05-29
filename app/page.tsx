@@ -14,7 +14,7 @@ const foundationItems = [
   },
   {
     title: "Local-first data",
-    detail: "Drizzle owns the SQLite schema and migrations at ./data/dynasty.db.",
+    detail: "Drizzle owns the SQLite schema and migrations at ./data/dynalytics.db.",
     icon: Database,
   },
   {
@@ -45,7 +45,7 @@ export default async function Home() {
             </Badge>
             <div className="max-w-3xl space-y-4">
               <h1 className="text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-                Dynasty Command Center
+                Dynalytics
               </h1>
               <p className="text-pretty text-base leading-7 text-muted-foreground sm:text-lg">
                 A calm, dense home base for linking leagues, reading player context, and turning messy roster data into the next move.

@@ -1,4 +1,4 @@
-# Dynasty Fantasy Football Analytics Platform Implementation Plan
+# Dynalytics Implementation Plan
 
 ## Milestone Model
 

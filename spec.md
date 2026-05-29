@@ -1,4 +1,4 @@
-# Dynasty Fantasy Football Analytics Platform Spec
+# Dynalytics Spec
 
 ## Purpose
 
@@ -29,8 +29,8 @@ SQLite should be stored in a predictable local path during development and mount
 
 Suggested paths:
 
-- Local database: `./data/dynasty.db`
-- Docker database: `/app/data/dynasty.db`
+- Local database: `./data/dynalytics.db`
+- Docker database: `/app/data/dynalytics.db`
 
 The app should not target the Edge runtime because SQLite access, import jobs, and filesystem-backed operational tasks need a Node runtime.
 

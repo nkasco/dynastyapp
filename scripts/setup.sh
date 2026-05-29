@@ -38,7 +38,7 @@ version_at_least() {
 
 cd "$(dirname "$0")/.."
 
-info "Setting up Dynasty Command Center..."
+info "Setting up Dynalytics..."
 
 command_exists node || fail "Node.js is required. Install Node.js ${MIN_NODE_MAJOR}.${MIN_NODE_MINOR}.0 or newer."
 

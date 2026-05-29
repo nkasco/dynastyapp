@@ -45,7 +45,7 @@ function Test-VersionAtLeast {
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
-Write-Info "Setting up Dynasty Command Center..."
+Write-Info "Setting up Dynalytics..."
 
 if (-not (Test-CommandExists "node")) {
   Stop-Setup "Node.js is required. Install Node.js $MinNodeMajor.$MinNodeMinor.0 or newer."

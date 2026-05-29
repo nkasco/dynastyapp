@@ -34,7 +34,7 @@ export default async function SignInPage({
               <LockKeyhole className="size-4" aria-hidden="true" />
             </div>
             <div>
-              <p className="text-sm font-semibold">Dynasty Command Center</p>
+              <p className="text-sm font-semibold">Dynalytics</p>
               <p className="text-xs text-muted-foreground">Private league intelligence</p>
             </div>
           </div>

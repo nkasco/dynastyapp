@@ -7,7 +7,7 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "sqlite",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "file:./data/dynasty.db",
+    url: process.env.DATABASE_URL ?? "file:./data/dynalytics.db",
   },
   strict: true,
   verbose: true,

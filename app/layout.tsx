@@ -6,8 +6,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Dynasty Command Center",
-    template: "%s | Dynasty Command Center",
+    default: "Dynalytics",
+    template: "%s | Dynalytics",
   },
   description: "Private dynasty football analysis for leagues, rosters, players, and trades.",
 };

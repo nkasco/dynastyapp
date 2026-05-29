@@ -33,7 +33,7 @@ export function AppShell({
               DC
             </div>
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">Dynasty Command Center</div>
+              <div className="truncate text-sm font-semibold">Dynalytics</div>
               <div className="truncate text-xs text-muted-foreground">Private league intelligence</div>
             </div>
           </div>
