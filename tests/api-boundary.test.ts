@@ -43,6 +43,7 @@ describe("API boundary", () => {
       playerListQuerySchema.parse({
         page: "2",
         pageSize: "10",
+        leagueId: "sleeper:123",
         sort: "production",
         dir: "desc",
         rostered: "true",
@@ -54,6 +55,7 @@ describe("API boundary", () => {
     ).toEqual({
       page: 2,
       pageSize: 10,
+      leagueId: "sleeper:123",
       sort: "production",
       dir: "desc",
       rostered: true,

@@ -221,7 +221,7 @@ function sortMappedPlayers<TPlayer extends PlayerDto>(items: TPlayer[], query: P
   });
 }
 
-async function enrichPlayers(rows: PlayerRow[], userId: string) {
+async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId?: string) {
   const playerIds = rows.map((row) => row.sleeperPlayerId);
   const exposureMap = new Map<string, RosterExposure>();
   const seasonMap = new Map<string, SeasonSummary>();
@@ -234,6 +234,12 @@ async function enrichPlayers(rows: PlayerRow[], userId: string) {
 
   if (playerIds.length === 0) {
     return [];
+  }
+
+  const exposureFilters: SQL[] = [inArray(rosterPlayers.sleeperPlayerId, playerIds), eq(rosterPlayers.slot, "roster")];
+
+  if (leagueId) {
+    exposureFilters.push(eq(rosterPlayers.leagueId, leagueId));
   }
 
   const exposureRows = await db
@@ -253,7 +259,7 @@ async function enrichPlayers(rows: PlayerRow[], userId: string) {
     .leftJoin(leagues, eq(rosterPlayers.leagueId, leagues.id))
     .leftJoin(rosters, and(eq(rosterPlayers.leagueId, rosters.leagueId), eq(rosterPlayers.rosterId, rosters.rosterId)))
     .leftJoin(leagueUsers, and(eq(rosters.leagueId, leagueUsers.leagueId), eq(rosters.ownerSleeperUserId, leagueUsers.sleeperUserId)))
-    .where(and(inArray(rosterPlayers.sleeperPlayerId, playerIds), eq(rosterPlayers.slot, "roster")));
+    .where(and(...exposureFilters));
 
   const exposureKeys = new Set<string>();
   const leagueKeys = new Map<string, Set<string>>();
@@ -353,7 +359,7 @@ export async function listPlayers(query: PlayerListQuery, userId: string) {
     .from(players)
     .where(where)
     .orderBy(basePlayerOrder(query));
-  const enrichedRows = await enrichPlayers(rows, userId);
+  const enrichedRows = await enrichPlayers(rows, userId, query.leagueId);
   const filteredRows = query.rostered
     ? enrichedRows.filter((row) => row.rosterExposure.rosteredCount > 0)
     : enrichedRows;

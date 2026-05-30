@@ -12,6 +12,7 @@ export const playerSortSchema = z.enum(["name", "age", "position", "team", "upda
 
 export const playerListQuerySchema = paginationQuerySchema.extend({
   q: z.string().trim().max(80).optional(),
+  leagueId: z.string().trim().max(128).optional(),
   position: z.string().trim().max(8).optional(),
   team: z.string().trim().max(8).optional(),
   status: z.string().trim().max(32).optional(),

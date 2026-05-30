@@ -1,14 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ArrowDownAZ, Filter, Loader2, Search, Shield, SlidersHorizontal, Star, TrendingUp, Users } from "lucide-react";
+import { Activity, ArrowDownAZ, Filter, Loader2, Search, Shield, SlidersHorizontal, Star, Trophy, TrendingUp, Users } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { PlayerListQuery, PlayerSummary } from "@/contracts";
+import type { LeagueSummary, PlayerListQuery, PlayerSummary } from "@/contracts";
 import { apiClient, ApiClientError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
@@ -84,8 +84,13 @@ function trendBars(player: PlayerSummary) {
   ));
 }
 
-function PlayerCard({ player }: { player: PlayerSummary }) {
+function rosterHolder(player: PlayerSummary) {
+  return player.rosterExposure.labels[0] ?? null;
+}
+
+function PlayerCard({ player, activeLeague }: { player: PlayerSummary; activeLeague: LeagueSummary | null }) {
   const exposure = player.rosterExposure.rosteredCount;
+  const holder = rosterHolder(player);
 
   return (
     <article className="grid min-h-[218px] content-between rounded-lg border border-border/80 bg-card p-4 shadow-xs">
@@ -119,9 +124,13 @@ function PlayerCard({ player }: { player: PlayerSummary }) {
             <span className="truncate text-right font-medium">{playerLine(player)}</span>
           </div>
           <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
-            <span className="text-muted-foreground">Exposure</span>
-            <span className="font-medium">
-              {exposure > 0 ? `${exposure} roster${exposure === 1 ? "" : "s"}` : "Free agent"}
+            <span className="text-muted-foreground">{activeLeague ? "Held by" : "Exposure"}</span>
+            <span className="min-w-0 truncate text-right font-medium">
+              {activeLeague
+                ? holder ?? "Free agent"
+                : exposure > 0
+                  ? `${exposure} roster${exposure === 1 ? "" : "s"}`
+                  : "Free agent"}
             </span>
           </div>
         </div>
@@ -151,14 +160,26 @@ export function PlayerBrowser() {
   const [fantasyRelevant, setFantasyRelevant] = useState(false);
   const [injuredOnly, setInjuredOnly] = useState(false);
   const [ageIndex, setAgeIndex] = useState(0);
+  const [activeLeagueId, setActiveLeagueId] = useState("");
   const deferredQuery = useDeferredValue(query);
   const ageFilter = ageOptions[ageIndex] ?? ageOptions[0];
+
+  const leaguesQuery = useQuery({
+    queryKey: ["leagues", "player-browser"],
+    queryFn: () => apiClient.leagues({ page: 1, pageSize: 100, sort: "season", dir: "desc" }),
+    retry: false,
+  });
+  const leagues = leaguesQuery.data?.items ?? [];
+  const selectedLeagueId =
+    activeLeagueId && leagues.some((league) => league.id === activeLeagueId) ? activeLeagueId : leagues[0]?.id || "";
+  const activeLeague = leagues.find((league) => league.id === selectedLeagueId) ?? null;
 
   const playerQuery = useMemo(
     () => ({
       page: 1,
       pageSize: 36,
       q: deferredQuery,
+      leagueId: selectedLeagueId || undefined,
       position: position === "ALL" ? undefined : position,
       sort,
       dir: (sort === "age" || sort === "name" ? "asc" : "desc") as PlayerListQuery["dir"],
@@ -168,7 +189,7 @@ export function PlayerBrowser() {
       ageMin: ageFilter.min,
       ageMax: ageFilter.max,
     }),
-    [ageFilter.max, ageFilter.min, deferredQuery, fantasyRelevant, injuredOnly, position, rosteredOnly, sort],
+    [ageFilter.max, ageFilter.min, deferredQuery, fantasyRelevant, injuredOnly, position, rosteredOnly, selectedLeagueId, sort],
   );
 
   const playersQuery = useQuery({
@@ -203,8 +224,8 @@ export function PlayerBrowser() {
             <div className="font-semibold">{total}</div>
           </div>
           <div className="rounded-md bg-muted/55 px-3 py-2">
-            <div className="text-muted-foreground">Mode</div>
-            <div className="font-semibold">{fantasyRelevant ? "Fantasy" : "All"}</div>
+            <div className="text-muted-foreground">League</div>
+            <div className="max-w-28 truncate font-semibold">{activeLeague?.name ?? "None"}</div>
           </div>
           <div className="rounded-md bg-muted/55 px-3 py-2">
             <div className="text-muted-foreground">Sort</div>
@@ -214,7 +235,7 @@ export function PlayerBrowser() {
       </section>
 
       <section className="grid gap-3 rounded-lg border border-border/80 bg-card p-4 shadow-xs">
-        <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto_auto] lg:items-end">
+        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,0.8fr)_auto_auto] lg:items-end">
           <div className="grid gap-2">
             <Label htmlFor="player-search">Search</Label>
             <div className="relative">
@@ -226,6 +247,33 @@ export function PlayerBrowser() {
                 placeholder="Player name"
                 className="pl-9"
               />
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="league-select">League</Label>
+            <div className="relative">
+              <Trophy className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <select
+                id="league-select"
+                value={selectedLeagueId}
+                onChange={(event) => setActiveLeagueId(event.target.value)}
+                disabled={leagues.length === 0}
+                className={cn(
+                  "border-input bg-background ring-offset-background flex h-10 w-full rounded-md border px-9 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50",
+                  "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+                )}
+              >
+                {leagues.length === 0 ? (
+                  <option value="">No linked leagues</option>
+                ) : (
+                  leagues.map((league) => (
+                    <option key={league.id} value={league.id}>
+                      {league.name}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
           </div>
 
@@ -350,7 +398,7 @@ export function PlayerBrowser() {
           )}
         >
           {players.map((player) => (
-            <PlayerCard key={player.sleeperPlayerId} player={player} />
+            <PlayerCard key={player.sleeperPlayerId} player={player} activeLeague={activeLeague} />
           ))}
         </section>
       )}
