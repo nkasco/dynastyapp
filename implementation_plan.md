@@ -114,15 +114,15 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
 
   **Milestone M5: Sleeper League Linked** ✅
 
-- [ ] Phase 8: nflverse stats ingestion
-  - [ ] Import DynastyProcess/nflreadr player ID bridge.
-  - [ ] Map Sleeper player IDs to GSIS IDs.
-  - [ ] Import nflverse weekly player stats.
-  - [ ] Import nflverse season summaries.
-  - [ ] Store current season plus prior five seasons by default.
-  - [ ] Add derived fantasy stat summaries.
-  - [ ] Track unmapped players.
-  - [ ] Show source freshness in the UI.
+- [x] Phase 8: nflverse stats ingestion
+  - [x] Import DynastyProcess/nflreadr player ID bridge.
+  - [x] Map Sleeper player IDs to GSIS IDs.
+  - [x] Import nflverse weekly player stats.
+  - [x] Import nflverse season summaries.
+  - [x] Store current season plus prior five seasons by default.
+  - [x] Add derived fantasy stat summaries.
+  - [x] Track unmapped players.
+  - [x] Show source freshness in the UI.
 
 - [ ] Phase 9: Players page
   - [ ] Build `/players` route.

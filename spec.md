@@ -73,6 +73,30 @@ drizzle/
 data/
 ```
 
+## Testing And Verification
+
+Implementation must follow red/green/refactor TDD for every new feature, importer, API route, analytics rule, and user-facing workflow.
+
+Required development loop:
+
+1. Red: add or update the smallest meaningful test that fails for the behavior being implemented.
+2. Green: implement the narrowest code change that makes the test pass.
+3. Refactor: clean up only after the test is passing, keeping behavior covered.
+4. Verify: run the relevant automated checks before calling the work complete.
+
+Testing rules:
+
+- Do not mark a phase or checklist item complete until its core behavior has a failing test first, a passing test after implementation, and an appropriate verification run recorded in the work summary.
+- Unit tests should cover pure parsing, mapping, scoring, aggregation, contract validation, and error classification.
+- Integration tests should cover route handlers, service-to-database writes, import job state transitions, idempotency, and warning/failure persistence.
+- UI work should include tests or browser verification for the actual route, responsive states, loading/error/empty states, and important user interactions.
+- External data integrations must be tested against representative saved fixtures and, before being declared done, against the actual source payload whenever network access is available.
+- For Sleeper and nflverse import phases, a mocked test alone is not enough. The implementation must also prove it can handle a real source response end-to-end: fetch, validate, persist, summarize counts, surface warnings, and keep source access read-only.
+- If live source testing cannot run because of missing credentials, network restrictions, source downtime, or rate limiting, the phase must stay incomplete or be explicitly labeled blocked/partial with the exact missing verification.
+- Regression fixes should start with a test that reproduces the observed bug whenever practical.
+- Database schema changes require migration generation/application verification plus tests or smoke checks that exercise the new schema through Drizzle.
+- `pnpm check` is the baseline final gate for app/API work. More specific checks are required when the risk is higher, such as live import runs, migration smoke tests, or browser verification.
+
 ## Authentication
 
 Use NextAuth/Auth.js as the authentication layer with these providers:
