@@ -5,6 +5,7 @@ import { and, asc, count, eq, isNull, lte, ne } from "drizzle-orm";
 import { env } from "@/env";
 import { db } from "@/server/db/client";
 import { importJobs, importLocks, leagues, warningQueue, type ImportJob, type NewImportJob } from "@/server/db/schema";
+import { importSleeperJob } from "@/server/sleeper/service";
 
 type ImportCounts = Record<string, number>;
 type ImportMetadata = Record<string, unknown>;
@@ -202,15 +203,7 @@ async function recordImportWarnings(job: ImportJob, warnings: string[]) {
 }
 
 async function executeSleeperJob(job: ImportJob): Promise<ImportExecutionResult> {
-  return {
-    counts: { unitsImported: 0, unitsSkipped: 1 },
-    metadata: {
-      ...(job.metadata ?? {}),
-      runner: "ready",
-      note: "Sleeper source execution hook is wired; payload ingestion begins in Phase 6.",
-      readOnly: true,
-    },
-  };
+  return importSleeperJob(job);
 }
 
 async function executeNflverseJob(job: ImportJob): Promise<ImportExecutionResult> {

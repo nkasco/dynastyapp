@@ -91,16 +91,16 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
 
   **Milestone M4: Nightly Imports Observable** ✅
 
-- [ ] Phase 6: Sleeper ingestion
-  - [ ] Build read-only Sleeper API client.
-  - [ ] Add rate-aware fetch and response validation.
-  - [ ] Import `/players/nfl` no more than once per day.
-  - [ ] Import league metadata from pasted Sleeper league ID.
-  - [ ] Import league users and rosters.
-  - [ ] Import matchups by week.
-  - [ ] Import transactions and traded picks.
-  - [ ] Import drafts and draft picks.
-  - [ ] Store raw source payloads for debugging.
+- [x] Phase 6: Sleeper ingestion
+  - [x] Build read-only Sleeper API client.
+  - [x] Add rate-aware fetch and response validation.
+  - [x] Import `/players/nfl` no more than once per day.
+  - [x] Import league metadata from pasted Sleeper league ID.
+  - [x] Import league users and rosters.
+  - [x] Import matchups by week.
+  - [x] Import transactions and traded picks.
+  - [x] Import drafts and draft picks.
+  - [x] Store raw source payloads for debugging.
 
 - [ ] Phase 7: League linking onboarding
   - [ ] Build authenticated onboarding route.
