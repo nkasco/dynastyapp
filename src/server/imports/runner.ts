@@ -363,6 +363,20 @@ function currentFootballSeason(date = new Date()) {
   return month < 2 ? date.getFullYear() - 1 : date.getFullYear();
 }
 
+export function nightlyNflverseImportJobInput(date = new Date()): Omit<
+  NewImportJob,
+  "id" | "status" | "createdAt" | "updatedAt"
+> {
+  return {
+    source: "nflverse",
+    scope: "full",
+    metadata: {
+      cadence: "nightly",
+      seasonHint: currentFootballSeason(date),
+    },
+  };
+}
+
 async function enqueueNightlySourceJobs() {
   const season = currentFootballSeason();
   const linkedLeagues = await db.select({ id: leagues.id }).from(leagues).orderBy(asc(leagues.name));
@@ -389,15 +403,7 @@ async function enqueueNightlySourceJobs() {
   }
 
   jobs.push(
-    await createIdempotentImportJob({
-      source: "nflverse",
-      scope: "full",
-      season,
-      metadata: {
-        cadence: "nightly",
-        seasons: Array.from({ length: 6 }, (_, index) => season - index),
-      },
-    }),
+    await createIdempotentImportJob(nightlyNflverseImportJobInput()),
   );
 
   return jobs;

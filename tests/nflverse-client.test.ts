@@ -23,15 +23,15 @@ describe("nflverse client", () => {
     expect(fetcher).toHaveBeenCalledWith("https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv");
   });
 
-  it("loads weekly stat rows and preserves quoted CSV fields", async () => {
+  it("loads explicit weekly stat seasons from stats_player CSVs and preserves quoted fields", async () => {
     const fetcher = vi.fn(async () =>
       csvResponse(
-        'player_id,player_display_name,season,week,season_type,recent_team,opponent_team,position,fantasy_points,fantasy_points_ppr\n00-0033873,"Mahomes, Patrick",2025,1,REG,KC,LAC,QB,25.4,25.4\n',
+        'player_id,player_display_name,season,week,season_type,team,opponent_team,position,fantasy_points,fantasy_points_ppr\n00-0033873,"Mahomes, Patrick",2025,1,REG,KC,LAC,QB,25.4,25.4\n',
       ),
     );
     const client = new NflverseClient({ baseUrl: "https://example.test/releases", fetcher });
 
-    await expect(client.getWeeklyStats()).resolves.toEqual([
+    await expect(client.getWeeklyStats([2025])).resolves.toEqual([
       expect.objectContaining({
         player_id: "00-0033873",
         player_display_name: "Mahomes, Patrick",
@@ -40,7 +40,33 @@ describe("nflverse client", () => {
         fantasy_points_ppr: 25.4,
       }),
     ]);
-    expect(fetcher).toHaveBeenCalledWith("https://example.test/releases/player_stats/player_stats.csv");
+    expect(fetcher).toHaveBeenCalledWith("https://example.test/releases/stats_player/stats_player_week_2025.csv");
+  });
+
+  it("discovers the latest available weekly stat seasons from the stats_player release", async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request) => {
+      const requestedUrl = String(url);
+
+      if (requestedUrl === "https://api.github.com/repos/nflverse/nflverse-data/releases/tags/stats_player") {
+        return new Response(JSON.stringify({ assets_url: "https://example.test/assets" }), { status: 200 });
+      }
+
+      if (requestedUrl === "https://example.test/assets?per_page=100&page=1") {
+        return new Response(
+          JSON.stringify([
+            { name: "stats_player_week_2024.csv" },
+            { name: "stats_player_week_2025.csv" },
+            { name: "stats_player_reg_2025.csv" },
+          ]),
+          { status: 200 },
+        );
+      }
+
+      return new Response("not found", { status: 404 });
+    });
+    const client = new NflverseClient({ fetcher });
+
+    await expect(client.getAvailableWeeklyStatSeasons()).resolves.toEqual([2025, 2024]);
   });
 });
 

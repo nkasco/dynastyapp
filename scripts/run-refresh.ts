@@ -1,8 +1,25 @@
 import "dotenv/config";
 
-import { runNightlyRefresh, runQueuedImportJobs } from "@/server/imports/runner";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const serverOnlyPath = require.resolve("server-only");
+
+require.cache[serverOnlyPath] = {
+  id: serverOnlyPath,
+  path: serverOnlyPath,
+  filename: serverOnlyPath,
+  loaded: true,
+  exports: {},
+  children: [],
+  paths: [],
+  isPreloading: false,
+  require,
+  parent: null,
+};
 
 async function main() {
+  const { runNightlyRefresh, runQueuedImportJobs } = await import("@/server/imports/runner");
   const mode = process.argv[2] ?? "nightly";
   const result = mode === "queue" ? await runQueuedImportJobs() : await runNightlyRefresh();
 
