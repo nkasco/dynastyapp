@@ -1,13 +1,15 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, ArrowDownAZ, Filter, Loader2, Search, Shield, SlidersHorizontal, Star, Trophy, TrendingUp, Users } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PprScoringControl } from "@/components/leagues/ppr-scoring-control";
 import type { LeagueSummary, PlayerListQuery, PlayerSummary } from "@/contracts";
 import { apiClient, ApiClientError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
@@ -68,24 +70,32 @@ function playerLine(player: PlayerSummary) {
     return `${formatNumber(stats.receptions)} rec | ${formatNumber(stats.receivingYards)} rec yd`;
   }
 
-  return `${formatNumber(player.seasonSummary?.fantasyPointsPpr, 1)} PPR`;
+  return `${formatNumber(player.seasonSummary?.fantasyPoints, 1)} pts`;
 }
 
 function trendBars(player: PlayerSummary) {
-  const max = Math.max(...player.trend.map((point) => point.fantasyPointsPpr ?? 0), 1);
+  const max = Math.max(...player.trend.map((point) => point.fantasyPoints ?? 0), 1);
 
   return player.trend.map((point, index) => (
     <span
       key={`${player.sleeperPlayerId}-${point.week}-${index}`}
       className="bg-primary/70 block w-2 rounded-sm"
-      style={{ height: `${Math.max(16, ((point.fantasyPointsPpr ?? 0) / max) * 42)}px` }}
-      title={`Week ${point.week}: ${formatNumber(point.fantasyPointsPpr, 1)} PPR`}
+      style={{ height: `${Math.max(16, ((point.fantasyPoints ?? 0) / max) * 42)}px` }}
+      title={`Week ${point.week}: ${formatNumber(point.fantasyPoints, 1)} pts`}
     />
   ));
 }
 
 function rosterHolder(player: PlayerSummary) {
   return player.rosterExposure.labels[0] ?? null;
+}
+
+function draftLine(player: PlayerSummary) {
+  if (!player.draftInfo) {
+    return "Draft -";
+  }
+
+  return `${player.draftInfo.year} NFL | R${player.draftInfo.round} P${player.draftInfo.pick}`;
 }
 
 function PlayerCard({ player, activeLeague }: { player: PlayerSummary; activeLeague: LeagueSummary | null }) {
@@ -110,7 +120,9 @@ function PlayerCard({ player, activeLeague }: { player: PlayerSummary; activeLea
           </div>
           <div className="rounded-md bg-primary/10 px-2.5 py-1.5 text-right text-primary">
             <div className="text-lg font-semibold">{formatNumber(player.seasonSummary?.fantasyPointsPerGame, 1)}</div>
-            <div className="text-[10px] uppercase tracking-normal">PPR/G</div>
+            <div className="text-[10px] uppercase tracking-normal">
+              {player.seasonSummary ? `${player.seasonSummary.scoringLabel}/G` : "PTS/G"}
+            </div>
           </div>
         </div>
 
@@ -122,6 +134,10 @@ function PlayerCard({ player, activeLeague }: { player: PlayerSummary; activeLea
           <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
             <span className="text-muted-foreground">Line</span>
             <span className="truncate text-right font-medium">{playerLine(player)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
+            <span className="text-muted-foreground">Draft</span>
+            <span className="truncate text-right font-medium">{draftLine(player)}</span>
           </div>
           <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
             <span className="text-muted-foreground">{activeLeague ? "Held by" : "Exposure"}</span>
@@ -153,6 +169,7 @@ function PlayerCard({ player, activeLeague }: { player: PlayerSummary; activeLea
 }
 
 export function PlayerBrowser() {
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState("ALL");
   const [sort, setSort] = useState<PlayerListQuery["sort"]>("production");
@@ -161,6 +178,8 @@ export function PlayerBrowser() {
   const [injuredOnly, setInjuredOnly] = useState(false);
   const [ageIndex, setAgeIndex] = useState(0);
   const [activeLeagueId, setActiveLeagueId] = useState("");
+  const [activeRosterId, setActiveRosterId] = useState("");
+  const [activeSeason, setActiveSeason] = useState("");
   const deferredQuery = useDeferredValue(query);
   const ageFilter = ageOptions[ageIndex] ?? ageOptions[0];
 
@@ -173,6 +192,22 @@ export function PlayerBrowser() {
   const selectedLeagueId =
     activeLeagueId && leagues.some((league) => league.id === activeLeagueId) ? activeLeagueId : leagues[0]?.id || "";
   const activeLeague = leagues.find((league) => league.id === selectedLeagueId) ?? null;
+  const selectedRosterId =
+    activeRosterId && activeLeague?.rosters.some((roster) => String(roster.rosterId) === activeRosterId)
+      ? activeRosterId
+      : "";
+  const activeRoster = activeLeague?.rosters.find((roster) => String(roster.rosterId) === selectedRosterId) ?? null;
+
+  const scoringMutation = useMutation({
+    mutationFn: ({ leagueId, value }: { leagueId: string; value: 0 | 0.5 | 1 }) =>
+      apiClient.updateLeagueSettings(leagueId, { pprScoringPreference: value }),
+    onSuccess: async () => {
+      toast.success("League scoring saved.");
+      await queryClient.invalidateQueries({ queryKey: ["leagues"] });
+      await queryClient.invalidateQueries({ queryKey: ["players"] });
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
 
   const playerQuery = useMemo(
     () => ({
@@ -180,6 +215,8 @@ export function PlayerBrowser() {
       pageSize: 36,
       q: deferredQuery,
       leagueId: selectedLeagueId || undefined,
+      rosterId: selectedRosterId ? Number(selectedRosterId) : undefined,
+      season: activeSeason ? Number(activeSeason) : undefined,
       position: position === "ALL" ? undefined : position,
       sort,
       dir: (sort === "age" || sort === "name" ? "asc" : "desc") as PlayerListQuery["dir"],
@@ -189,7 +226,19 @@ export function PlayerBrowser() {
       ageMin: ageFilter.min,
       ageMax: ageFilter.max,
     }),
-    [ageFilter.max, ageFilter.min, deferredQuery, fantasyRelevant, injuredOnly, position, rosteredOnly, selectedLeagueId, sort],
+    [
+      ageFilter.max,
+      ageFilter.min,
+      activeSeason,
+      deferredQuery,
+      fantasyRelevant,
+      injuredOnly,
+      position,
+      rosteredOnly,
+      selectedLeagueId,
+      selectedRosterId,
+      sort,
+    ],
   );
 
   const playersQuery = useQuery({
@@ -199,6 +248,9 @@ export function PlayerBrowser() {
   });
   const players = playersQuery.data?.items ?? [];
   const total = playersQuery.data?.pagination.total ?? 0;
+  const availableSeasons = playersQuery.data?.availableSeasons ?? [];
+  const selectedSeason = activeSeason || (playersQuery.data?.selectedSeason ? String(playersQuery.data.selectedSeason) : "");
+  const activeScoringLabel = playersQuery.data?.scoring.label ?? activeLeague?.pprScoring.label ?? "Full PPR";
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-5 py-6 sm:px-8 lg:px-10">
@@ -214,7 +266,7 @@ export function PlayerBrowser() {
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/80 bg-card p-2 text-sm shadow-xs sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/80 bg-card p-2 text-sm shadow-xs sm:grid-cols-5">
           <div className="rounded-md bg-muted/55 px-3 py-2">
             <div className="text-muted-foreground">Showing</div>
             <div className="font-semibold">{players.length}</div>
@@ -228,14 +280,34 @@ export function PlayerBrowser() {
             <div className="max-w-28 truncate font-semibold">{activeLeague?.name ?? "None"}</div>
           </div>
           <div className="rounded-md bg-muted/55 px-3 py-2">
-            <div className="text-muted-foreground">Sort</div>
-            <div className="font-semibold capitalize">{sort}</div>
+            <div className="text-muted-foreground">Roster</div>
+            <div className="max-w-28 truncate font-semibold">{activeRoster?.ownerName ?? "All teams"}</div>
+          </div>
+          <div className="rounded-md bg-muted/55 px-3 py-2">
+            <div className="text-muted-foreground">Season</div>
+            <div className="max-w-28 truncate font-semibold">{selectedSeason || "-"}</div>
           </div>
         </div>
       </section>
 
+      {activeLeague ? (
+        <section className="grid gap-3 rounded-lg border border-border/80 bg-card p-4 shadow-xs md:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] md:items-center">
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold">League scoring</h2>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Sleeper scoring is used when the league exposes reception points. Set a local profile fallback only when that value is missing.
+            </p>
+          </div>
+          <PprScoringControl
+            league={activeLeague}
+            disabled={scoringMutation.isPending}
+            onChange={(value) => scoringMutation.mutate({ leagueId: activeLeague.id, value })}
+          />
+        </section>
+      ) : null}
+
       <section className="grid gap-3 rounded-lg border border-border/80 bg-card p-4 shadow-xs">
-        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,0.8fr)_auto_auto] lg:items-end">
+        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,0.8fr)_minmax(220px,0.8fr)_minmax(160px,0.55fr)] xl:grid-cols-[minmax(220px,1fr)_minmax(220px,0.8fr)_minmax(220px,0.8fr)_minmax(160px,0.55fr)_auto_auto] xl:items-end">
           <div className="grid gap-2">
             <Label htmlFor="player-search">Search</Label>
             <div className="relative">
@@ -257,7 +329,10 @@ export function PlayerBrowser() {
               <select
                 id="league-select"
                 value={selectedLeagueId}
-                onChange={(event) => setActiveLeagueId(event.target.value)}
+                onChange={(event) => {
+                  setActiveLeagueId(event.target.value);
+                  setActiveRosterId("");
+                }}
                 disabled={leagues.length === 0}
                 className={cn(
                   "border-input bg-background ring-offset-background flex h-10 w-full rounded-md border px-9 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50",
@@ -275,6 +350,51 @@ export function PlayerBrowser() {
                 )}
               </select>
             </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="roster-select">Roster</Label>
+            <div className="relative">
+              <Users className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <select
+                id="roster-select"
+                value={selectedRosterId}
+                onChange={(event) => setActiveRosterId(event.target.value)}
+                disabled={!activeLeague || activeLeague.rosters.length === 0}
+                className={cn(
+                  "border-input bg-background ring-offset-background flex h-10 w-full rounded-md border px-9 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50",
+                  "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+                )}
+              >
+                <option value="">All teams</option>
+                {activeLeague?.rosters.map((roster) => (
+                  <option key={roster.rosterId} value={roster.rosterId}>
+                    {roster.ownerName}
+                    {roster.isUserRoster ? " (you)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="season-select">Season</Label>
+            <select
+              id="season-select"
+              value={selectedSeason}
+              onChange={(event) => setActiveSeason(event.target.value)}
+              disabled={availableSeasons.length === 0}
+              className={cn(
+                "border-input bg-background ring-offset-background flex h-10 w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50",
+                "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+              )}
+            >
+              {availableSeasons.map((season) => (
+                <option key={season} value={season}>
+                  {season}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid gap-2">
@@ -360,7 +480,7 @@ export function PlayerBrowser() {
           </div>
           <div className="ml-auto hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
             <Shield className="size-4" aria-hidden="true" />
-            Sleeper remains read-only
+            {activeScoringLabel} scoring
           </div>
         </div>
       </section>

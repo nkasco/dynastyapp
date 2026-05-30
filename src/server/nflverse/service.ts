@@ -23,7 +23,7 @@ type ImportCounts = Record<string, number>;
 type StatValue = number | string | null;
 
 const DEFAULT_WRITE_BATCH_SIZE = 250;
-const DEFAULT_IMPORT_SEASONS = 6;
+const DEFAULT_IMPORT_SEASONS = 10;
 const MAX_WARNING_MESSAGES = 25;
 const FF_PLAYER_IDS_URL = "https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv";
 
@@ -180,14 +180,11 @@ function sourceUrl(baseUrl: string, release: string, fileName: string) {
   return `${baseUrl.replace(/\/$/, "")}/${release}/${fileName}`;
 }
 
-function currentFootballSeason(date = new Date()) {
-  const month = date.getMonth();
-  return month < 2 ? date.getFullYear() - 1 : date.getFullYear();
-}
-
-function defaultSeasons(season?: number | null) {
-  const latest = season ?? currentFootballSeason();
-  return Array.from({ length: DEFAULT_IMPORT_SEASONS }, (_, index) => latest - index);
+export function latestAvailableSeasons(rows: Pick<NflverseWeeklyStat, "season">[], count = DEFAULT_IMPORT_SEASONS) {
+  return Array.from(new Set(rows.map((row) => row.season)))
+    .filter((season) => Number.isInteger(season))
+    .sort((left, right) => right - left)
+    .slice(0, count);
 }
 
 function weeklyStatId(row: {
@@ -499,14 +496,16 @@ function normalizeWeeklyRow(row: NflverseWeeklyStat, map: Map<string, string>) {
 async function importStats(input: {
   client: NflverseClient;
   timestamp: Date;
-  seasons: number[];
+  seasons: number[] | null;
   week?: number | null;
   writeWeekly: boolean;
   writeSeason: boolean;
 }) {
   const map = await gsisToSleeperMap();
-  const weeklyRows = (await input.client.getWeeklyStats())
-    .filter((row) => input.seasons.includes(row.season))
+  const sourceRows = await input.client.getWeeklyStats();
+  const seasons = input.seasons ?? latestAvailableSeasons(sourceRows);
+  const weeklyRows = sourceRows
+    .filter((row) => seasons.includes(row.season))
     .filter((row) => (input.week ? row.week === input.week : true))
     .map((row) => normalizeWeeklyRow(row, map));
   const unmappedRows = weeklyRows.filter((row) => row.gsisId && !row.sleeperPlayerId);
@@ -517,8 +516,8 @@ async function importStats(input: {
   if (input.writeWeekly) {
     await db.delete(weeklyStats).where(
       input.week
-        ? and(inArray(weeklyStats.season, input.seasons), eq(weeklyStats.week, input.week))
-        : inArray(weeklyStats.season, input.seasons),
+        ? and(inArray(weeklyStats.season, seasons), eq(weeklyStats.week, input.week))
+        : inArray(weeklyStats.season, seasons),
     );
 
     for (const batch of chunkArray(
@@ -547,7 +546,7 @@ async function importStats(input: {
   const summaries = deriveSeasonSummaries(weeklyRows);
 
   if (input.writeSeason) {
-    await db.delete(seasonStats).where(inArray(seasonStats.season, input.seasons));
+    await db.delete(seasonStats).where(inArray(seasonStats.season, seasons));
 
     for (const batch of chunkArray(
       summaries.map((row) => ({
@@ -572,11 +571,11 @@ async function importStats(input: {
   }
 
   await storeSnapshot({
-    sourceKey: `player_stats:${input.seasons.join(",")}${input.week ? `:week:${input.week}` : ""}`,
+    sourceKey: `player_stats:${seasons.join(",")}${input.week ? `:week:${input.week}` : ""}`,
     week: input.week ?? null,
     payload: {
       url: sourceUrl(env.NFLVERSE_BASE_URL, "player_stats", "player_stats.csv"),
-      seasons: input.seasons,
+      seasons,
       week: input.week ?? null,
       rowsSeen: weeklyRows.length,
       importedAt: input.timestamp.toISOString(),
@@ -586,7 +585,7 @@ async function importStats(input: {
 
   await setAppSetting("nflverse.stats.lastImportedAt", {
     importedAt: input.timestamp.toISOString(),
-    seasons: input.seasons,
+    seasons,
     week: input.week ?? null,
   });
 
@@ -597,6 +596,7 @@ async function importStats(input: {
       seasonStatsImported,
       unmappedStatRows: unmappedRows.length,
       snapshotsStored,
+      seasonsImported: seasons.length,
     },
     warnings: [
       ...unmappedRows.slice(0, MAX_WARNING_MESSAGES).map((row) => {
@@ -627,7 +627,9 @@ export async function importNflverseJob(job: ImportJob, client = new NflverseCli
   const seasons =
     typeof job.metadata === "object" && job.metadata !== null && Array.isArray(job.metadata.seasons)
       ? job.metadata.seasons.map(Number).filter((season) => Number.isInteger(season))
-      : defaultSeasons(job.season);
+      : job.season
+        ? [job.season]
+        : null;
   const result = { counts: {} as ImportCounts, warnings: [] as string[] };
   const scope = job.scope ?? "full";
 
@@ -655,7 +657,6 @@ export async function importNflverseJob(job: ImportJob, client = new NflverseCli
     warnings: result.warnings,
     metadata: {
       ...(job.metadata ?? {}),
-      seasons,
       readOnly: true,
     },
   };

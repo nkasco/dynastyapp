@@ -16,6 +16,7 @@ import {
   playerResponseSchema,
   playersResponseSchema,
   tradeEvaluationResponseSchema,
+  updateLeagueSettingsRequestSchema,
   type ApiFailure,
   type CreateNflverseImportRequest,
   type CreateSleeperImportRequest,
@@ -24,6 +25,7 @@ import {
   type LeagueListQuery,
   type LeaguePreviewQuery,
   type PlayerListQuery,
+  type UpdateLeagueSettingsRequest,
 } from "@/contracts";
 
 type ApiData<TSchema extends z.ZodType> = Extract<z.output<TSchema>, { ok: true }> extends { data: infer TData }
@@ -80,6 +82,11 @@ export const apiClient = {
   player: (id: string) => apiFetch(`/api/players/${encodeURIComponent(id)}`, playerResponseSchema),
   leagues: (query?: Partial<LeagueListQuery>) => apiFetch(`/api/leagues${queryString(query)}`, leaguesResponseSchema),
   league: (id: string) => apiFetch(`/api/leagues/${encodeURIComponent(id)}`, leagueResponseSchema),
+  updateLeagueSettings: (id: string, input: UpdateLeagueSettingsRequest) =>
+    apiFetch(`/api/leagues/${encodeURIComponent(id)}`, leagueResponseSchema, {
+      method: "PATCH",
+      body: body(updateLeagueSettingsRequestSchema, input),
+    }),
   leaguePreview: (query: LeaguePreviewQuery) =>
     apiFetch(`/api/leagues/preview${queryString(leaguePreviewQuerySchema.parse(query))}`, leaguePreviewResponseSchema),
   linkLeague: (input: LinkLeagueRequest) =>

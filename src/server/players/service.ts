@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, gte, inArray, like, lte, ne, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, like, lte, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type { PlayerListQuery } from "@/contracts/players";
 import { db } from "@/server/db/client";
@@ -8,6 +8,7 @@ import {
   leagueUsers,
   leagues,
   players,
+  playerSourceIds,
   rosterPlayers,
   rosters,
   seasonStats,
@@ -31,8 +32,10 @@ type RosterExposure = {
 type SeasonSummary = {
   season: number;
   games: number | null;
+  fantasyPoints: number | null;
   fantasyPointsPpr: number | null;
   fantasyPointsPerGame: number | null;
+  scoringLabel: string;
   keyStats: {
     passingYards: number | null;
     passingTds: number | null;
@@ -45,7 +48,23 @@ type SeasonSummary = {
 };
 type TrendPoint = {
   week: number;
+  fantasyPoints: number | null;
   fantasyPointsPpr: number | null;
+};
+type DraftInfo = {
+  year: number;
+  round: number;
+  pick: number;
+};
+type ScoringMode = {
+  value: 0 | 0.5 | 1;
+  label: string;
+};
+
+const scoringLabels: Record<ScoringMode["value"], string> = {
+  0: "Standard",
+  0.5: "Half PPR",
+  1: "Full PPR",
 };
 
 function numberStat(stats: Record<string, number | string | null> | null, key: string) {
@@ -68,6 +87,82 @@ function keyStats(stats: Record<string, number | string | null> | null) {
     receivingYards: numberStat(stats, "receiving_yards"),
     receivingTds: numberStat(stats, "receiving_tds"),
   };
+}
+
+function integerMetadataValue(metadata: Record<string, unknown> | null | undefined, key: string) {
+  const value = metadata?.[key];
+  const parsed = typeof value === "string" ? Number(value) : value;
+
+  return typeof parsed === "number" && Number.isInteger(parsed) ? parsed : null;
+}
+
+export function draftInfoFromMetadata(metadata: Record<string, unknown> | null | undefined): DraftInfo | null {
+  const year = integerMetadataValue(metadata, "draft_year");
+  const round = integerMetadataValue(metadata, "draft_round");
+  const pick = integerMetadataValue(metadata, "draft_pick");
+
+  if (year == null || round == null || pick == null) {
+    return null;
+  }
+
+  return { year, round, pick };
+}
+
+function normalizeScoringValue(value: unknown): ScoringMode["value"] | null {
+  const parsed = typeof value === "string" ? Number(value) : value;
+
+  if (parsed === 0 || parsed === 0.5 || parsed === 1) {
+    return parsed;
+  }
+
+  return null;
+}
+
+function scoringMode(value: ScoringMode["value"]): ScoringMode {
+  return {
+    value,
+    label: scoringLabels[value],
+  };
+}
+
+function fantasyPointsForScoring(
+  row: {
+    fantasyPointsStandard: number | null;
+    fantasyPointsHalfPpr: number | null;
+    fantasyPointsPpr: number | null;
+  },
+  scoring: ScoringMode,
+) {
+  switch (scoring.value) {
+    case 0:
+      return row.fantasyPointsStandard;
+    case 0.5:
+      return row.fantasyPointsHalfPpr;
+    case 1:
+    default:
+      return row.fantasyPointsPpr;
+  }
+}
+
+async function scoringForLeague(leagueId: string | undefined, userId: string): Promise<ScoringMode> {
+  if (!leagueId) {
+    return scoringMode(1);
+  }
+
+  const [row] = await db
+    .select({
+      scoringSettings: leagues.scoringSettings,
+      pprScoringPreference: userLeagueTeams.pprScoringPreference,
+    })
+    .from(leagues)
+    .innerJoin(userLeagueTeams, and(eq(userLeagueTeams.leagueId, leagues.id), eq(userLeagueTeams.userId, userId)))
+    .where(eq(leagues.id, leagueId))
+    .limit(1);
+
+  const sleeperValue = normalizeScoringValue(row?.scoringSettings?.rec);
+  const profileValue = normalizeScoringValue(row?.pprScoringPreference);
+
+  return scoringMode(sleeperValue ?? profileValue ?? 1);
 }
 
 function playerBadges(input: { row: PlayerRow; exposure: RosterExposure; summary: SeasonSummary | null }) {
@@ -100,6 +195,7 @@ function mapPlayer(input: {
   exposure: RosterExposure;
   summary: SeasonSummary | null;
   trend: TrendPoint[];
+  draftInfo: DraftInfo | null;
 }) {
   return {
     sleeperPlayerId: input.row.sleeperPlayerId,
@@ -114,6 +210,7 @@ function mapPlayer(input: {
     rosterExposure: input.exposure,
     seasonSummary: input.summary,
     trend: input.trend,
+    draftInfo: input.draftInfo,
     badges: playerBadges(input),
     sourceUpdatedAt: toIso(input.row.sourceUpdatedAt),
     updatedAt: input.row.updatedAt.toISOString(),
@@ -198,7 +295,7 @@ function sortMappedPlayers<TPlayer extends PlayerDto>(items: TPlayer[], query: P
     switch (query.sort) {
       case "production":
         return (
-          ((left.seasonSummary?.fantasyPointsPpr ?? -1) - (right.seasonSummary?.fantasyPointsPpr ?? -1)) * multiplier ||
+          ((left.seasonSummary?.fantasyPoints ?? -1) - (right.seasonSummary?.fantasyPoints ?? -1)) * multiplier ||
           left.fullName.localeCompare(right.fullName)
         );
       case "exposure":
@@ -221,11 +318,12 @@ function sortMappedPlayers<TPlayer extends PlayerDto>(items: TPlayer[], query: P
   });
 }
 
-async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId?: string) {
+async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId: string | undefined, query: PlayerListQuery, scoring: ScoringMode) {
   const playerIds = rows.map((row) => row.sleeperPlayerId);
   const exposureMap = new Map<string, RosterExposure>();
   const seasonMap = new Map<string, SeasonSummary>();
   const trendMap = new Map<string, TrendPoint[]>();
+  const draftInfoMap = new Map<string, DraftInfo>();
 
   for (const row of rows) {
     exposureMap.set(row.sleeperPlayerId, { rosteredCount: 0, leagueCount: 0, labels: [] });
@@ -295,10 +393,16 @@ async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId?: strin
     }
   }
 
+  const seasonFilters: SQL[] = [inArray(seasonStats.sleeperPlayerId, playerIds)];
+  const selectedSeason = query.season ?? null;
+  if (selectedSeason) {
+    seasonFilters.push(eq(seasonStats.season, selectedSeason));
+  }
+
   const seasonRows = await db
     .select()
     .from(seasonStats)
-    .where(inArray(seasonStats.sleeperPlayerId, playerIds))
+    .where(and(...seasonFilters))
     .orderBy(desc(seasonStats.season));
 
   for (const row of seasonRows) {
@@ -306,16 +410,25 @@ async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId?: strin
       continue;
     }
 
+    const fantasyPoints = fantasyPointsForScoring(row, scoring);
+
     seasonMap.set(row.sleeperPlayerId, {
       season: row.season,
       games: row.games,
+      fantasyPoints,
       fantasyPointsPpr: row.fantasyPointsPpr,
       fantasyPointsPerGame:
-        row.fantasyPointsPpr != null && row.games && row.games > 0
-          ? Math.round((row.fantasyPointsPpr / row.games) * 10) / 10
+        fantasyPoints != null && row.games && row.games > 0
+          ? Math.round((fantasyPoints / row.games) * 10) / 10
           : null,
+      scoringLabel: scoring.label,
       keyStats: keyStats(row.stats),
     });
+  }
+
+  const trendFilters: SQL[] = [inArray(weeklyStats.sleeperPlayerId, playerIds)];
+  if (selectedSeason) {
+    trendFilters.push(eq(weeklyStats.season, selectedSeason));
   }
 
   const trendRows = await db
@@ -323,10 +436,12 @@ async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId?: strin
       sleeperPlayerId: weeklyStats.sleeperPlayerId,
       season: weeklyStats.season,
       week: weeklyStats.week,
+      fantasyPointsStandard: weeklyStats.fantasyPointsStandard,
+      fantasyPointsHalfPpr: weeklyStats.fantasyPointsHalfPpr,
       fantasyPointsPpr: weeklyStats.fantasyPointsPpr,
     })
     .from(weeklyStats)
-    .where(inArray(weeklyStats.sleeperPlayerId, playerIds))
+    .where(and(...trendFilters))
     .orderBy(desc(weeklyStats.season), desc(weeklyStats.week));
 
   for (const row of trendRows) {
@@ -336,8 +451,27 @@ async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId?: strin
 
     const trend = trendMap.get(row.sleeperPlayerId) ?? [];
     if (trend.length < 5) {
-      trend.push({ week: row.week, fantasyPointsPpr: row.fantasyPointsPpr });
+      trend.push({
+        week: row.week,
+        fantasyPoints: fantasyPointsForScoring(row, scoring),
+        fantasyPointsPpr: row.fantasyPointsPpr,
+      });
       trendMap.set(row.sleeperPlayerId, trend);
+    }
+  }
+
+  const sourceRows = await db
+    .select({
+      sleeperPlayerId: playerSourceIds.sleeperPlayerId,
+      metadata: playerSourceIds.metadata,
+    })
+    .from(playerSourceIds)
+    .where(and(eq(playerSourceIds.source, "gsis"), inArray(playerSourceIds.sleeperPlayerId, playerIds)));
+
+  for (const row of sourceRows) {
+    const draftInfo = draftInfoFromMetadata(row.metadata);
+    if (draftInfo) {
+      draftInfoMap.set(row.sleeperPlayerId, draftInfo);
     }
   }
 
@@ -347,29 +481,74 @@ async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId?: strin
       exposure: exposureMap.get(row.sleeperPlayerId) ?? { rosteredCount: 0, leagueCount: 0, labels: [] },
       summary: seasonMap.get(row.sleeperPlayerId) ?? null,
       trend: [...(trendMap.get(row.sleeperPlayerId) ?? [])].reverse(),
+      draftInfo: draftInfoMap.get(row.sleeperPlayerId) ?? null,
     }),
   );
 }
 
 export async function listPlayers(query: PlayerListQuery, userId: string) {
-  const where = playerWhere(query);
+  const scoring = await scoringForLeague(query.leagueId, userId);
+  const availableSeasons = await listAvailableSeasons();
+  const selectedSeason = query.season ?? availableSeasons[0] ?? null;
+  const resolvedQuery = selectedSeason ? { ...query, season: selectedSeason } : query;
+  let rosterPlayerIds: string[] | null = null;
+  let seasonPlayerIds: string[] | null = null;
+
+  if (resolvedQuery.leagueId && resolvedQuery.rosterId) {
+    const rosterRows = await db
+      .select({ sleeperPlayerId: rosterPlayers.sleeperPlayerId })
+      .from(rosterPlayers)
+      .innerJoin(userLeagueTeams, and(eq(userLeagueTeams.leagueId, rosterPlayers.leagueId), eq(userLeagueTeams.userId, userId)))
+      .where(
+        and(
+          eq(rosterPlayers.leagueId, resolvedQuery.leagueId),
+          eq(rosterPlayers.rosterId, resolvedQuery.rosterId),
+          eq(rosterPlayers.slot, "roster"),
+        ),
+      );
+    rosterPlayerIds = rosterRows.map((row) => row.sleeperPlayerId);
+  }
+
+  if (selectedSeason) {
+    const seasonRows = await db
+      .select({ sleeperPlayerId: seasonStats.sleeperPlayerId })
+      .from(seasonStats)
+      .where(eq(seasonStats.season, selectedSeason));
+    seasonPlayerIds = seasonRows.flatMap((row) => (row.sleeperPlayerId ? [row.sleeperPlayerId] : []));
+  }
+
+  const baseWhere = playerWhere(resolvedQuery);
+  const filters = [baseWhere].filter(Boolean) as SQL[];
+
+  if (rosterPlayerIds != null) {
+    filters.push(rosterPlayerIds.length > 0 ? inArray(players.sleeperPlayerId, rosterPlayerIds) : sql`0 = 1`);
+  }
+
+  if (seasonPlayerIds != null) {
+    filters.push(seasonPlayerIds.length > 0 ? inArray(players.sleeperPlayerId, seasonPlayerIds) : sql`0 = 1`);
+  }
+
+  const where = filters.length > 0 ? and(...filters) : undefined;
   const offset = (query.page - 1) * query.pageSize;
   const rows = await db
     .select()
     .from(players)
     .where(where)
-    .orderBy(basePlayerOrder(query));
-  const enrichedRows = await enrichPlayers(rows, userId, query.leagueId);
-  const filteredRows = query.rostered
+    .orderBy(basePlayerOrder(resolvedQuery));
+  const enrichedRows = await enrichPlayers(rows, userId, resolvedQuery.leagueId, resolvedQuery, scoring);
+  const filteredRows = resolvedQuery.rostered
     ? enrichedRows.filter((row) => row.rosterExposure.rosteredCount > 0)
     : enrichedRows;
-  const sortedRows = sortMappedPlayers(filteredRows, query);
-  const paginatedRows = sortedRows.slice(offset, offset + query.pageSize);
+  const sortedRows = sortMappedPlayers(filteredRows, resolvedQuery);
+  const paginatedRows = sortedRows.slice(offset, offset + resolvedQuery.pageSize);
 
   const total = sortedRows.length;
 
   return {
     items: paginatedRows,
+    availableSeasons,
+    selectedSeason,
+    scoring,
     pagination: {
       page: query.page,
       pageSize: query.pageSize,
@@ -377,6 +556,11 @@ export async function listPlayers(query: PlayerListQuery, userId: string) {
       pageCount: Math.ceil(total / query.pageSize),
     },
   };
+}
+
+async function listAvailableSeasons() {
+  const rows = await db.select({ season: seasonStats.season }).from(seasonStats).groupBy(seasonStats.season).orderBy(desc(seasonStats.season));
+  return rows.map((row) => row.season);
 }
 
 export async function getPlayerById(sleeperPlayerId: string, userId: string) {
@@ -388,6 +572,7 @@ export async function getPlayerById(sleeperPlayerId: string, userId: string) {
     throw new ApiError("NOT_FOUND", "Player not found.");
   }
 
-  const [enriched] = await enrichPlayers([row], userId);
+  const scoring = await scoringForLeague(undefined, userId);
+  const [enriched] = await enrichPlayers([row], userId, undefined, { page: 1, pageSize: 1, sort: "name", dir: "asc" }, scoring);
   return enriched;
 }

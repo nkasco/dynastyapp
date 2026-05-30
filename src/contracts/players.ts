@@ -13,6 +13,8 @@ export const playerSortSchema = z.enum(["name", "age", "position", "team", "upda
 export const playerListQuerySchema = paginationQuerySchema.extend({
   q: z.string().trim().max(80).optional(),
   leagueId: z.string().trim().max(128).optional(),
+  rosterId: z.coerce.number().int().min(1).optional(),
+  season: z.coerce.number().int().min(2000).max(2100).optional(),
   position: z.string().trim().max(8).optional(),
   team: z.string().trim().max(8).optional(),
   status: z.string().trim().max(32).optional(),
@@ -44,14 +46,23 @@ export const playerKeyStatsSchema = z.object({
 export const playerSeasonSummarySchema = z.object({
   season: z.number().int(),
   games: z.number().int().nullable(),
+  fantasyPoints: z.number().nullable(),
   fantasyPointsPpr: z.number().nullable(),
   fantasyPointsPerGame: z.number().nullable(),
+  scoringLabel: z.string(),
   keyStats: playerKeyStatsSchema,
 });
 
 export const playerTrendPointSchema = z.object({
   week: z.number().int(),
+  fantasyPoints: z.number().nullable(),
   fantasyPointsPpr: z.number().nullable(),
+});
+
+export const playerDraftInfoSchema = z.object({
+  year: z.number().int(),
+  round: z.number().int(),
+  pick: z.number().int(),
 });
 
 export const playerSchema = z.object({
@@ -67,12 +78,22 @@ export const playerSchema = z.object({
   rosterExposure: playerRosterExposureSchema,
   seasonSummary: playerSeasonSummarySchema.nullable(),
   trend: z.array(playerTrendPointSchema),
+  draftInfo: playerDraftInfoSchema.nullable(),
   badges: z.array(z.string()),
   sourceUpdatedAt: z.string().nullable(),
   updatedAt: z.string(),
 });
 
-export const playersResponseSchema = apiResponseSchema(paginatedSchema(playerSchema));
+export const playerListResponseDataSchema = paginatedSchema(playerSchema).extend({
+  availableSeasons: z.array(z.number().int()),
+  selectedSeason: z.number().int().nullable(),
+  scoring: z.object({
+    value: z.union([z.literal(0), z.literal(0.5), z.literal(1)]),
+    label: z.string(),
+  }),
+});
+
+export const playersResponseSchema = apiResponseSchema(playerListResponseDataSchema);
 export const playerResponseSchema = apiResponseSchema(playerSchema);
 
 export type PlayerListQuery = z.infer<typeof playerListQuerySchema>;

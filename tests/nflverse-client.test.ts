@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { deriveSeasonSummaries, NflverseClient } from "@/server/nflverse/service";
+import { deriveSeasonSummaries, latestAvailableSeasons, NflverseClient } from "@/server/nflverse/service";
 
 function csvResponse(body: string) {
   return new Response(body, { status: 200, headers: { "content-type": "text/csv" } });
@@ -45,6 +45,14 @@ describe("nflverse client", () => {
 });
 
 describe("nflverse season summaries", () => {
+  it("selects the latest ten source seasons when no explicit season is requested", () => {
+    const seasons = latestAvailableSeasons(
+      Array.from({ length: 14 }, (_, index) => ({ season: 2012 + index })).concat([{ season: 2024 }]),
+    );
+
+    expect(seasons).toEqual([2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016]);
+  });
+
   it("derives season totals from weekly stat rows", () => {
     const summaries = deriveSeasonSummaries([
       {

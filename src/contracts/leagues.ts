@@ -16,8 +16,28 @@ export const linkLeagueRequestSchema = z.object({
   rosterId: z.number().int().min(1),
 });
 
+export const pprScoringValueSchema = z.union([z.literal(0), z.literal(0.5), z.literal(1)]);
+
+export const updateLeagueSettingsRequestSchema = z.object({
+  pprScoringPreference: pprScoringValueSchema,
+});
+
 export const leaguePreviewQuerySchema = z.object({
   sleeperLeagueId: z.string().trim().min(1).max(32),
+});
+
+export const pprScoringSchema = z.object({
+  value: pprScoringValueSchema.nullable(),
+  label: z.string(),
+  source: z.enum(["sleeper", "profile", "unknown"]),
+  canSetProfilePreference: z.boolean(),
+});
+
+export const leagueRosterSchema = z.object({
+  rosterId: z.number().int(),
+  ownerName: z.string(),
+  playerCount: z.number().int().min(0),
+  isUserRoster: z.boolean(),
 });
 
 export const leagueSchema = z.object({
@@ -27,7 +47,9 @@ export const leagueSchema = z.object({
   season: z.number().int(),
   status: z.string().nullable(),
   sport: z.string(),
+  pprScoring: pprScoringSchema,
   rosterCount: z.number().int().min(0),
+  rosters: z.array(leagueRosterSchema),
   importedAt: z.string().nullable(),
   updatedAt: z.string(),
 });
@@ -66,6 +88,7 @@ export const leaguePreviewResponseSchema = apiResponseSchema(leaguePreviewSchema
 
 export type LeagueListQuery = z.infer<typeof leagueListQuerySchema>;
 export type LinkLeagueRequest = z.infer<typeof linkLeagueRequestSchema>;
+export type UpdateLeagueSettingsRequest = z.infer<typeof updateLeagueSettingsRequestSchema>;
 export type LeaguePreviewQuery = z.infer<typeof leaguePreviewQuerySchema>;
 export type LeagueSummary = z.infer<typeof leagueSchema>;
 export type LeaguePreview = z.infer<typeof leaguePreviewSchema>;

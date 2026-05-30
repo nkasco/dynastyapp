@@ -2,9 +2,14 @@ import "server-only";
 
 import { and, asc, count, desc, eq, like, type SQL } from "drizzle-orm";
 
-import type { LeagueListQuery, LeaguePreviewQuery, LinkLeagueRequest } from "@/contracts/leagues";
+import type {
+  LeagueListQuery,
+  LeaguePreviewQuery,
+  LinkLeagueRequest,
+  UpdateLeagueSettingsRequest,
+} from "@/contracts/leagues";
 import { db } from "@/server/db/client";
-import { leagues, rosters, userLeagueTeams } from "@/server/db/schema";
+import { leagueUsers, leagues, rosterPlayers, rosters, userLeagueTeams } from "@/server/db/schema";
 import { ApiError } from "@/server/api/errors";
 import { createImportJob } from "@/server/imports/service";
 import { SleeperClient, SleeperHttpError } from "@/server/sleeper/service";
@@ -18,7 +23,93 @@ async function rosterCountByLeague(leagueId: string) {
   return row?.value ?? 0;
 }
 
-async function mapLeague(row: typeof leagues.$inferSelect) {
+async function rosterOptionsByLeague(leagueId: string, userRosterId?: number | null) {
+  const rows = await db
+    .select({
+      rosterId: rosters.rosterId,
+      ownerName: leagueUsers.displayName,
+      username: leagueUsers.username,
+      playerCount: count(rosterPlayers.sleeperPlayerId),
+    })
+    .from(rosters)
+    .leftJoin(leagueUsers, and(eq(leagueUsers.leagueId, rosters.leagueId), eq(leagueUsers.sleeperUserId, rosters.ownerSleeperUserId)))
+    .leftJoin(
+      rosterPlayers,
+      and(
+        eq(rosterPlayers.leagueId, rosters.leagueId),
+        eq(rosterPlayers.rosterId, rosters.rosterId),
+        eq(rosterPlayers.slot, "roster"),
+      ),
+    )
+    .where(eq(rosters.leagueId, leagueId))
+    .groupBy(rosters.rosterId, leagueUsers.displayName, leagueUsers.username)
+    .orderBy(asc(rosters.rosterId));
+
+  return rows.map((row) => ({
+    rosterId: row.rosterId,
+    ownerName: row.ownerName ?? row.username ?? `Roster ${row.rosterId}`,
+    playerCount: row.playerCount,
+    isUserRoster: row.rosterId === userRosterId,
+  }));
+}
+
+type PprScoringValue = 0 | 0.5 | 1;
+
+const pprLabels: Record<PprScoringValue, string> = {
+  0: "Standard",
+  0.5: "Half PPR",
+  1: "Full PPR",
+};
+
+function normalizePprValue(value: unknown): PprScoringValue | null {
+  const parsed = typeof value === "string" ? Number(value) : value;
+
+  if (parsed === 0 || parsed === 0.5 || parsed === 1) {
+    return parsed;
+  }
+
+  return null;
+}
+
+export function pprScoringFromSettings(
+  scoringSettings: Record<string, unknown> | null,
+  profilePreference?: number | null,
+) {
+  const sleeperValue = normalizePprValue(scoringSettings?.rec);
+
+  if (sleeperValue != null) {
+    return {
+      value: sleeperValue,
+      label: pprLabels[sleeperValue],
+      source: "sleeper" as const,
+      canSetProfilePreference: false,
+    };
+  }
+
+  const profileValue = normalizePprValue(profilePreference);
+
+  if (profileValue != null) {
+    return {
+      value: profileValue,
+      label: pprLabels[profileValue],
+      source: "profile" as const,
+      canSetProfilePreference: true,
+    };
+  }
+
+  return {
+    value: null,
+    label: "Unknown PPR",
+    source: "unknown" as const,
+    canSetProfilePreference: true,
+  };
+}
+
+async function mapLeague(
+  row: typeof leagues.$inferSelect,
+  profilePreference?: number | null,
+  userRosterId?: number | null,
+) {
   return {
     id: row.id,
     sleeperLeagueId: row.sleeperLeagueId,
@@ -26,7 +117,9 @@ async function mapLeague(row: typeof leagues.$inferSelect) {
     season: row.season,
     status: row.status,
     sport: row.sport,
+    pprScoring: pprScoringFromSettings(row.scoringSettings, profilePreference),
     rosterCount: await rosterCountByLeague(row.id),
+    rosters: await rosterOptionsByLeague(row.id, userRosterId),
     importedAt: toIso(row.importedAt),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -71,7 +164,11 @@ export async function listLeagues(query: LeagueListQuery, userId: string) {
     .innerJoin(userLeagueTeams, eq(userLeagueTeams.leagueId, leagues.id))
     .where(where);
   const rows = await db
-    .select({ league: leagues })
+    .select({
+      league: leagues,
+      rosterId: userLeagueTeams.rosterId,
+      pprScoringPreference: userLeagueTeams.pprScoringPreference,
+    })
     .from(leagues)
     .innerJoin(userLeagueTeams, eq(userLeagueTeams.leagueId, leagues.id))
     .where(where)
@@ -82,7 +179,7 @@ export async function listLeagues(query: LeagueListQuery, userId: string) {
   const total = totalRow?.value ?? 0;
 
   return {
-    items: await Promise.all(rows.map((row) => mapLeague(row.league))),
+    items: await Promise.all(rows.map((row) => mapLeague(row.league, row.pprScoringPreference, row.rosterId))),
     pagination: {
       page: query.page,
       pageSize: query.pageSize,
@@ -94,7 +191,11 @@ export async function listLeagues(query: LeagueListQuery, userId: string) {
 
 export async function getLeagueById(id: string, userId: string) {
   const [row] = await db
-    .select({ league: leagues })
+    .select({
+      league: leagues,
+      rosterId: userLeagueTeams.rosterId,
+      pprScoringPreference: userLeagueTeams.pprScoringPreference,
+    })
     .from(leagues)
     .innerJoin(userLeagueTeams, eq(userLeagueTeams.leagueId, leagues.id))
     .where(and(eq(leagues.id, id), eq(userLeagueTeams.userId, userId)))
@@ -104,7 +205,29 @@ export async function getLeagueById(id: string, userId: string) {
     throw new ApiError("NOT_FOUND", "League not found.");
   }
 
-  return mapLeague(row.league);
+  return mapLeague(row.league, row.pprScoringPreference, row.rosterId);
+}
+
+export async function updateLeagueSettings(id: string, input: UpdateLeagueSettingsRequest, userId: string) {
+  const existing = await db
+    .select({ leagueId: userLeagueTeams.leagueId })
+    .from(userLeagueTeams)
+    .where(and(eq(userLeagueTeams.leagueId, id), eq(userLeagueTeams.userId, userId)))
+    .limit(1);
+
+  if (!existing[0]) {
+    throw new ApiError("NOT_FOUND", "League not found.");
+  }
+
+  await db
+    .update(userLeagueTeams)
+    .set({
+      pprScoringPreference: input.pprScoringPreference,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(userLeagueTeams.leagueId, id), eq(userLeagueTeams.userId, userId)));
+
+  return getLeagueById(id, userId);
 }
 
 function leagueIdFromSleeper(sleeperLeagueId: string) {

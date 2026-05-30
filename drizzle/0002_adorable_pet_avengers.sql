@@ -1,0 +1,1 @@
+ALTER TABLE `user_league_teams` ADD `ppr_scoring_preference` real;

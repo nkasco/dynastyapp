@@ -1,8 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Search, ShieldCheck, Users } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Search, ShieldCheck, Trophy, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -11,9 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PprScoringControl } from "@/components/leagues/ppr-scoring-control";
 import {
   leaguePreviewQuerySchema,
   type ImportJobDto,
+  type LeagueSummary,
   type LeaguePreview,
   type LeaguePreviewQuery,
 } from "@/contracts";
@@ -48,6 +50,7 @@ function statusTone(status: ImportJobDto["status"]) {
 }
 
 export function LeagueLinkOnboarding() {
+  const queryClient = useQueryClient();
   const [preview, setPreview] = useState<LeaguePreview | null>(null);
   const [importJobId, setImportJobId] = useState<string | null>(null);
   const [selectedRosterId, setSelectedRosterId] = useState<number | null>(null);
@@ -55,6 +58,12 @@ export function LeagueLinkOnboarding() {
   const previewForm = useForm<LeaguePreviewQuery>({
     resolver: zodResolver(leaguePreviewQuerySchema),
     defaultValues: { sleeperLeagueId: "" },
+  });
+
+  const leaguesQuery = useQuery({
+    queryKey: ["leagues", "league-overview"],
+    queryFn: () => apiClient.leagues({ page: 1, pageSize: 100, sort: "season", dir: "desc" }),
+    retry: false,
   });
 
   const previewMutation = useMutation({
@@ -69,10 +78,21 @@ export function LeagueLinkOnboarding() {
 
   const linkMutation = useMutation({
     mutationFn: apiClient.linkLeague,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setImportJobId(data.importJobId);
       toast.success("League link queued. Starting import.");
+      await queryClient.invalidateQueries({ queryKey: ["leagues"] });
       void apiClient.runQueuedImports().catch((error: unknown) => toast.error(errorMessage(error)));
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+
+  const scoringMutation = useMutation({
+    mutationFn: ({ leagueId, value }: { leagueId: string; value: 0 | 0.5 | 1 }) =>
+      apiClient.updateLeagueSettings(leagueId, { pprScoringPreference: value }),
+    onSuccess: async () => {
+      toast.success("League scoring saved.");
+      await queryClient.invalidateQueries({ queryKey: ["leagues"] });
     },
     onError: (error) => toast.error(errorMessage(error)),
   });
@@ -96,6 +116,7 @@ export function LeagueLinkOnboarding() {
   const previewBusy = previewMutation.isPending;
   const linkBusy = linkMutation.isPending || importJob?.status === "running" || importJob?.status === "queued";
   const selectedRoster = preview?.rosters.find((roster) => roster.rosterId === selectedRosterId);
+  const linkedLeagues = leaguesQuery.data?.items ?? [];
 
   function linkSelectedRoster() {
     if (!preview || !selectedRosterId) {
@@ -122,6 +143,53 @@ export function LeagueLinkOnboarding() {
               Paste a Sleeper league ID, confirm the league, choose your roster, then import every team for analysis.
             </p>
           </div>
+        </div>
+
+        <div className="rounded-lg border border-border/80 bg-card p-4 shadow-xs">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Imported leagues</h2>
+              <p className="text-sm text-muted-foreground">Known leagues stay here after import.</p>
+            </div>
+            <Trophy className="size-4 text-muted-foreground" aria-hidden="true" />
+          </div>
+
+          {leaguesQuery.isPending ? (
+            <div className="flex min-h-24 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              Loading leagues
+            </div>
+          ) : leaguesQuery.isError ? (
+            <p className="rounded-md border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {errorMessage(leaguesQuery.error)}
+            </p>
+          ) : linkedLeagues.length === 0 ? (
+            <p className="rounded-md border border-dashed border-border/90 px-3 py-6 text-center text-sm text-muted-foreground">
+              No imported leagues yet. Preview a Sleeper league below to link the first one.
+            </p>
+          ) : (
+            <div className="grid gap-3">
+              {linkedLeagues.map((league: LeagueSummary) => (
+                <div key={league.id} className="grid gap-3 rounded-md border border-border/75 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{league.name}</div>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <Badge variant="secondary">{league.season}</Badge>
+                        <Badge variant="outline">{league.rosterCount} rosters</Badge>
+                        {league.status ? <Badge variant="outline">{league.status}</Badge> : null}
+                      </div>
+                    </div>
+                  </div>
+                  <PprScoringControl
+                    league={league}
+                    disabled={scoringMutation.isPending}
+                    onChange={(value) => scoringMutation.mutate({ leagueId: league.id, value })}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <form

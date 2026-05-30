@@ -186,6 +186,7 @@ export const userLeagueTeams = sqliteTable(
       .notNull()
       .references(() => leagues.id, { onDelete: "cascade" }),
     rosterId: integer("roster_id").notNull(),
+    pprScoringPreference: real("ppr_scoring_preference"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
