@@ -1,10 +1,10 @@
 import "server-only";
 
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { CreateNflverseImportRequest, CreateSleeperImportRequest } from "@/contracts/imports";
 import { db } from "@/server/db/client";
-import { importJobs, type NewImportJob } from "@/server/db/schema";
+import { importJobs, leagues, userLeagueTeams, type NewImportJob } from "@/server/db/schema";
 import { ApiError } from "@/server/api/errors";
 import { createIdempotentImportJob, runNightlyRefresh, runQueuedImportJobs } from "@/server/imports/runner";
 
@@ -36,13 +36,52 @@ export async function createImportJob(input: Omit<NewImportJob, "id" | "status" 
   return mapImportJob(job);
 }
 
+async function requireLinkedSleeperLeague(input: CreateSleeperImportRequest, userId: string) {
+  if (input.scope === "players") {
+    return null;
+  }
+
+  if (!input.leagueId && !input.sleeperLeagueId) {
+    throw new ApiError("BAD_REQUEST", "Sleeper league imports require a linked league.");
+  }
+
+  const filters = [eq(userLeagueTeams.userId, userId)];
+
+  if (input.leagueId) {
+    filters.push(eq(userLeagueTeams.leagueId, input.leagueId));
+  }
+
+  if (input.sleeperLeagueId) {
+    filters.push(eq(leagues.sleeperLeagueId, input.sleeperLeagueId));
+  }
+
+  const [row] = await db
+    .select({ leagueId: leagues.id, sleeperLeagueId: leagues.sleeperLeagueId })
+    .from(userLeagueTeams)
+    .innerJoin(leagues, eq(leagues.id, userLeagueTeams.leagueId))
+    .where(and(...filters))
+    .limit(1);
+
+  if (!row) {
+    throw new ApiError("FORBIDDEN", "Link this Sleeper league to your profile before importing its league data.");
+  }
+
+  return row;
+}
+
 export async function queueSleeperImport(input: CreateSleeperImportRequest, userId: string) {
+  const linkedLeague = await requireLinkedSleeperLeague(input, userId);
+
   return createImportJob({
     userId,
     source: "sleeper",
     scope: input.scope,
-    leagueId: input.leagueId ?? null,
-    metadata: input.sleeperLeagueId ? { sleeperLeagueId: input.sleeperLeagueId } : null,
+    leagueId: linkedLeague?.leagueId ?? input.leagueId ?? null,
+    metadata: linkedLeague?.sleeperLeagueId
+      ? { sleeperLeagueId: linkedLeague.sleeperLeagueId }
+      : input.sleeperLeagueId
+        ? { sleeperLeagueId: input.sleeperLeagueId }
+        : null,
   });
 }
 
@@ -55,12 +94,43 @@ export async function queueNflverseImport(input: CreateNflverseImportRequest) {
   });
 }
 
+export function isSharedImportJob(row: Pick<typeof importJobs.$inferSelect, "source" | "scope" | "leagueId" | "userId">) {
+  if (row.userId || row.leagueId) {
+    return false;
+  }
+
+  if (row.source === "nflverse" || row.source === "system") {
+    return true;
+  }
+
+  return row.source === "sleeper" && row.scope === "players";
+}
+
+async function userCanReadLeagueImport(leagueId: string, userId: string) {
+  const [row] = await db
+    .select({ leagueId: userLeagueTeams.leagueId })
+    .from(userLeagueTeams)
+    .where(and(eq(userLeagueTeams.userId, userId), eq(userLeagueTeams.leagueId, leagueId)))
+    .limit(1);
+
+  return Boolean(row);
+}
+
 export async function getImportJob(id: string, userId: string) {
   const row = await db.query.importJobs.findFirst({
-    where: and(eq(importJobs.id, id), or(isNull(importJobs.userId), eq(importJobs.userId, userId))),
+    where: eq(importJobs.id, id),
   });
 
   if (!row) {
+    throw new ApiError("NOT_FOUND", "Import job not found.");
+  }
+
+  const canRead =
+    row.userId === userId ||
+    isSharedImportJob(row) ||
+    (row.leagueId ? await userCanReadLeagueImport(row.leagueId, userId) : false);
+
+  if (!canRead) {
     throw new ApiError("NOT_FOUND", "Import job not found.");
   }
 

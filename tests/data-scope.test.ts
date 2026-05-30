@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { isSharedImportJob } from "@/server/imports/service";
+
 function source(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
@@ -41,5 +43,23 @@ describe("data ownership boundaries", () => {
     expect(sleeperImportRoute).toContain("queueSleeperImport(input, user.id)");
     expect(importsService).toContain("userId");
     expect(nflverseImportRoute).toContain("queueNflverseImport(input)");
+  });
+
+  it("treats nflverse and non-league shared jobs as global, but not Sleeper league jobs", () => {
+    expect(isSharedImportJob({ source: "nflverse", scope: "full", leagueId: null, userId: null })).toBe(true);
+    expect(isSharedImportJob({ source: "system", scope: "nightly-refresh", leagueId: null, userId: null })).toBe(true);
+    expect(isSharedImportJob({ source: "sleeper", scope: "players", leagueId: null, userId: null })).toBe(true);
+    expect(isSharedImportJob({ source: "sleeper", scope: "league", leagueId: "league-1", userId: null })).toBe(false);
+    expect(isSharedImportJob({ source: "sleeper", scope: "league-link", leagueId: "league-1", userId: "user-1" })).toBe(
+      false,
+    );
+  });
+
+  it("requires linked Sleeper leagues before queueing Sleeper league imports", () => {
+    const importsService = source("src/server/imports/service.ts");
+
+    expect(importsService).toContain("requireLinkedSleeperLeague");
+    expect(importsService).toContain("Link this Sleeper league to your profile before importing its league data.");
+    expect(importsService).toContain("eq(userLeagueTeams.userId, userId)");
   });
 });
