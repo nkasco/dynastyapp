@@ -14,6 +14,7 @@
     "db:studio": "drizzle-kit studio",
     "db:bootstrap": "tsx scripts/bootstrap-db.ts",
     "imports:run": "tsx scripts/run-refresh.ts queue",
+    "player-images:refresh": "tsx scripts/refresh-player-images.ts",
     "refresh:run": "tsx scripts/run-refresh.ts",
     "refresh:worker": "tsx scripts/refresh-worker.ts",
     "lint": "eslint .",

@@ -131,6 +131,7 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
   - [x] Add sorting by name, age, position, production, and roster exposure.
   - [x] Build premium player card component.
   - [x] Add card stats, trend sparkline, badges, and team-color accents.
+  - [x] Add locally cached player headshots refreshed by an ad-hoc `pnpm` command.
   - [x] Add responsive desktop/mobile layouts.
   - [x] Add empty, loading, and error states.
 
