@@ -13,6 +13,11 @@ export const leagueListQuerySchema = paginationQuerySchema.extend({
 
 export const linkLeagueRequestSchema = z.object({
   sleeperLeagueId: z.string().trim().min(1).max(32),
+  rosterId: z.number().int().min(1),
+});
+
+export const leaguePreviewQuerySchema = z.object({
+  sleeperLeagueId: z.string().trim().min(1).max(32),
 });
 
 export const leagueSchema = z.object({
@@ -28,16 +33,39 @@ export const leagueSchema = z.object({
 });
 
 export const linkedLeagueSchema = z.object({
+  leagueId: z.string(),
   sleeperLeagueId: z.string(),
+  rosterId: z.number().int(),
   importJobId: z.string(),
   status: z.literal("queued"),
   message: z.string(),
 });
 
+export const leaguePreviewRosterSchema = z.object({
+  rosterId: z.number().int(),
+  ownerSleeperUserId: z.string().nullable(),
+  ownerName: z.string(),
+  playerCount: z.number().int().min(0),
+  starterCount: z.number().int().min(0),
+});
+
+export const leaguePreviewSchema = z.object({
+  sleeperLeagueId: z.string(),
+  name: z.string(),
+  season: z.number().int(),
+  status: z.string().nullable(),
+  rosterCount: z.number().int().min(0),
+  userCount: z.number().int().min(0),
+  rosters: z.array(leaguePreviewRosterSchema),
+});
+
 export const leaguesResponseSchema = apiResponseSchema(paginatedSchema(leagueSchema));
 export const leagueResponseSchema = apiResponseSchema(leagueSchema);
 export const linkLeagueResponseSchema = apiResponseSchema(linkedLeagueSchema);
+export const leaguePreviewResponseSchema = apiResponseSchema(leaguePreviewSchema);
 
 export type LeagueListQuery = z.infer<typeof leagueListQuerySchema>;
 export type LinkLeagueRequest = z.infer<typeof linkLeagueRequestSchema>;
+export type LeaguePreviewQuery = z.infer<typeof leaguePreviewQuerySchema>;
 export type LeagueSummary = z.infer<typeof leagueSchema>;
+export type LeaguePreview = z.infer<typeof leaguePreviewSchema>;

@@ -7,9 +7,9 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    await requireApiUser();
+    const user = await requireApiUser();
     const input = linkLeagueRequestSchema.parse(await readJson(request));
-    return apiOk(await queueLeagueLink(input), 202);
+    return apiOk(await queueLeagueLink(input, user.id), 202);
   } catch (error) {
     return handleApiError(error);
   }

@@ -2,11 +2,12 @@ import "server-only";
 
 import { and, asc, count, desc, eq, like, type SQL } from "drizzle-orm";
 
-import type { LeagueListQuery, LinkLeagueRequest } from "@/contracts/leagues";
+import type { LeagueListQuery, LeaguePreviewQuery, LinkLeagueRequest } from "@/contracts/leagues";
 import { db } from "@/server/db/client";
-import { leagues, rosters } from "@/server/db/schema";
+import { leagues, rosters, userLeagueTeams } from "@/server/db/schema";
 import { ApiError } from "@/server/api/errors";
 import { createImportJob } from "@/server/imports/service";
+import { SleeperClient, SleeperHttpError } from "@/server/sleeper/service";
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
@@ -97,17 +98,151 @@ export async function getLeagueById(id: string) {
   return mapLeague(row);
 }
 
-export async function queueLeagueLink(input: LinkLeagueRequest) {
+function leagueIdFromSleeper(sleeperLeagueId: string) {
+  return `sleeper:${sleeperLeagueId}`;
+}
+
+function seasonNumber(value: string | number | null | undefined) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : new Date().getFullYear();
+}
+
+function sleeperErrorToApi(error: unknown, sleeperLeagueId: string): never {
+  if (error instanceof SleeperHttpError && error.status === 404) {
+    throw new ApiError("NOT_FOUND", `Sleeper league ${sleeperLeagueId} was not found.`);
+  }
+
+  throw error;
+}
+
+export async function previewLeagueLink(input: LeaguePreviewQuery) {
+  const client = new SleeperClient();
+
+  try {
+    const [league, users, sleeperRosters] = await Promise.all([
+      client.getLeague(input.sleeperLeagueId),
+      client.getLeagueUsers(input.sleeperLeagueId),
+      client.getLeagueRosters(input.sleeperLeagueId),
+    ]);
+    const usersById = new Map(users.map((user) => [user.user_id, user]));
+
+    return {
+      sleeperLeagueId: league.league_id,
+      name: league.name ?? `Sleeper league ${league.league_id}`,
+      season: seasonNumber(league.season),
+      status: league.status ?? null,
+      rosterCount: sleeperRosters.length,
+      userCount: users.length,
+      rosters: sleeperRosters
+        .map((roster) => {
+          const owner = roster.owner_id ? usersById.get(roster.owner_id) : undefined;
+
+          return {
+            rosterId: roster.roster_id,
+            ownerSleeperUserId: roster.owner_id ?? null,
+            ownerName: owner?.display_name ?? owner?.username ?? roster.owner_id ?? `Roster ${roster.roster_id}`,
+            playerCount: roster.players?.length ?? 0,
+            starterCount: roster.starters?.length ?? 0,
+          };
+        })
+        .sort((left, right) => left.rosterId - right.rosterId),
+    };
+  } catch (error) {
+    sleeperErrorToApi(error, input.sleeperLeagueId);
+  }
+}
+
+async function upsertPreviewLeague(input: LinkLeagueRequest) {
+  const client = new SleeperClient();
+
+  try {
+    const [league, sleeperRosters] = await Promise.all([
+      client.getLeague(input.sleeperLeagueId),
+      client.getLeagueRosters(input.sleeperLeagueId),
+    ]);
+
+    if (!sleeperRosters.some((roster) => roster.roster_id === input.rosterId)) {
+      throw new ApiError("BAD_REQUEST", "Select one of the rosters from this Sleeper league.");
+    }
+
+    const timestamp = new Date();
+    const leagueId = leagueIdFromSleeper(league.league_id);
+
+    await db
+      .insert(leagues)
+      .values({
+        id: leagueId,
+        sleeperLeagueId: league.league_id,
+        name: league.name ?? `Sleeper league ${league.league_id}`,
+        avatar: league.avatar ?? null,
+        season: seasonNumber(league.season),
+        status: league.status ?? null,
+        sport: league.sport ?? "nfl",
+        scoringSettings: league.scoring_settings ?? null,
+        rosterPositions: league.roster_positions ?? null,
+        settings: league.settings ?? null,
+        metadata: league.metadata ?? null,
+        importedAt: null,
+        sourceUpdatedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .onConflictDoUpdate({
+        target: leagues.sleeperLeagueId,
+        set: {
+          name: league.name ?? `Sleeper league ${league.league_id}`,
+          avatar: league.avatar ?? null,
+          season: seasonNumber(league.season),
+          status: league.status ?? null,
+          sport: league.sport ?? "nfl",
+          scoringSettings: league.scoring_settings ?? null,
+          rosterPositions: league.roster_positions ?? null,
+          settings: league.settings ?? null,
+          metadata: league.metadata ?? null,
+          sourceUpdatedAt: timestamp,
+          updatedAt: timestamp,
+        },
+      });
+
+    return leagueId;
+  } catch (error) {
+    sleeperErrorToApi(error, input.sleeperLeagueId);
+  }
+}
+
+export async function queueLeagueLink(input: LinkLeagueRequest, userId: string) {
+  const leagueId = await upsertPreviewLeague(input);
+
+  await db
+    .insert(userLeagueTeams)
+    .values({
+      userId,
+      leagueId,
+      rosterId: input.rosterId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [userLeagueTeams.userId, userLeagueTeams.leagueId],
+      set: {
+        rosterId: input.rosterId,
+        updatedAt: new Date(),
+      },
+    });
+
   const job = await createImportJob({
     source: "sleeper",
     scope: "league-link",
-    metadata: { sleeperLeagueId: input.sleeperLeagueId },
+    leagueId,
+    metadata: { sleeperLeagueId: input.sleeperLeagueId, selectedRosterId: input.rosterId },
   });
 
   return {
+    leagueId,
     sleeperLeagueId: input.sleeperLeagueId,
+    rosterId: input.rosterId,
     importJobId: job.id,
     status: "queued" as const,
-    message: "League link queued. Sleeper remains read-only; ingestion will own the actual import.",
+    message: "League link queued. Sleeper remains read-only while the local import fills in league context.",
   };
 }

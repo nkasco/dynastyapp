@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { label: "Players", icon: Search },
-  { label: "Leagues", icon: Users },
-  { label: "Trade Lab", icon: FlaskConical },
-  { label: "Reports", icon: BarChart3 },
+  { label: "Players", href: "/players", icon: Search },
+  { label: "Leagues", href: "/onboarding/leagues", icon: Users },
+  { label: "Trade Lab", href: "/trades", icon: FlaskConical },
+  { label: "Reports", href: "/reports", icon: BarChart3 },
 ];
 
 export function AppShell({
@@ -39,14 +39,14 @@ export function AppShell({
           </div>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
             {navItems.map((item) => (
-              <a
+              <Link
                 key={item.label}
-                href="#"
+                href={item.href}
                 className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors"
               >
                 <item.icon className="size-4" aria-hidden="true" />
                 {item.label}
-              </a>
+              </Link>
             ))}
             {user?.role === "admin" ? (
               <Link

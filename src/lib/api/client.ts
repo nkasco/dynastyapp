@@ -7,6 +7,8 @@ import {
   importJobResponseSchema,
   importJobsResponseSchema,
   leagueResponseSchema,
+  leaguePreviewQuerySchema,
+  leaguePreviewResponseSchema,
   leaguesResponseSchema,
   linkLeagueRequestSchema,
   linkLeagueResponseSchema,
@@ -20,6 +22,7 @@ import {
   type EvaluateTradeRequest,
   type LinkLeagueRequest,
   type LeagueListQuery,
+  type LeaguePreviewQuery,
   type PlayerListQuery,
 } from "@/contracts";
 
@@ -77,6 +80,8 @@ export const apiClient = {
   player: (id: string) => apiFetch(`/api/players/${encodeURIComponent(id)}`, playerResponseSchema),
   leagues: (query?: Partial<LeagueListQuery>) => apiFetch(`/api/leagues${queryString(query)}`, leaguesResponseSchema),
   league: (id: string) => apiFetch(`/api/leagues/${encodeURIComponent(id)}`, leagueResponseSchema),
+  leaguePreview: (query: LeaguePreviewQuery) =>
+    apiFetch(`/api/leagues/preview${queryString(leaguePreviewQuerySchema.parse(query))}`, leaguePreviewResponseSchema),
   linkLeague: (input: LinkLeagueRequest) =>
     apiFetch("/api/leagues/link", linkLeagueResponseSchema, {
       method: "POST",

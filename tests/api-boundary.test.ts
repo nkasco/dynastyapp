@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { apiFailureSchema, playerListQuerySchema } from "@/contracts";
+import { apiFailureSchema, leaguePreviewResponseSchema, linkLeagueRequestSchema, playerListQuerySchema } from "@/contracts";
 
 const componentFiles = [
   "src/components/app-shell/app-shell.tsx",
   "src/components/auth/auth-forms.tsx",
   "src/components/auth/invite-form.tsx",
+  "src/components/leagues/league-link-onboarding.tsx",
   "src/components/providers.tsx",
 ];
 
@@ -42,5 +43,40 @@ describe("API boundary", () => {
       error: { code: "UNAUTHORIZED", message: "Sign in to use this API." },
       meta: { requestId: "request-id" },
     });
+  });
+
+  it("requires roster selection when linking a league", () => {
+    expect(linkLeagueRequestSchema.parse({ sleeperLeagueId: "123", rosterId: 7 })).toEqual({
+      sleeperLeagueId: "123",
+      rosterId: 7,
+    });
+    expect(() => linkLeagueRequestSchema.parse({ sleeperLeagueId: "123" })).toThrow();
+  });
+
+  it("defines a typed league preview response", () => {
+    const parsed = leaguePreviewResponseSchema.parse({
+        ok: true,
+        data: {
+          sleeperLeagueId: "123",
+          name: "Home League",
+          season: 2026,
+          status: "in_season",
+          rosterCount: 2,
+          userCount: 2,
+          rosters: [
+            {
+              rosterId: 1,
+              ownerSleeperUserId: "u1",
+              ownerName: "Nate",
+              playerCount: 22,
+              starterCount: 10,
+            },
+          ],
+        },
+        meta: { requestId: "request-id" },
+      });
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ok ? parsed.data.rosters[0]?.ownerName : null).toBe("Nate");
   });
 });

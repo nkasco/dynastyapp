@@ -102,17 +102,17 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
   - [x] Import drafts and draft picks.
   - [x] Store raw source payloads for debugging.
 
-- [ ] Phase 7: League linking onboarding
-  - [ ] Build authenticated onboarding route.
-  - [ ] Add form to paste Sleeper league ID.
-  - [ ] Validate league existence and show preview.
-  - [ ] Fetch league users and rosters.
-  - [ ] Let each user select their team.
-  - [ ] Store user-to-league/team mapping.
-  - [ ] Import all teams in the league for analysis.
-  - [ ] Show import progress and warnings.
+- [x] Phase 7: League linking onboarding
+  - [x] Build authenticated onboarding route.
+  - [x] Add form to paste Sleeper league ID.
+  - [x] Validate league existence and show preview.
+  - [x] Fetch league users and rosters.
+  - [x] Let each user select their team.
+  - [x] Store user-to-league/team mapping.
+  - [x] Import all teams in the league for analysis.
+  - [x] Show import progress and warnings.
 
-  **Milestone M5: Sleeper League Linked**
+  **Milestone M5: Sleeper League Linked** ✅
 
 - [ ] Phase 8: nflverse stats ingestion
   - [ ] Import DynastyProcess/nflreadr player ID bridge.
