@@ -63,6 +63,11 @@ export const linkedLeagueSchema = z.object({
   message: z.string(),
 });
 
+export const deletedLeagueSchema = z.object({
+  leagueId: z.string(),
+  deletedLeagueData: z.boolean(),
+});
+
 export const leaguePreviewRosterSchema = z.object({
   rosterId: z.number().int(),
   ownerSleeperUserId: z.string().nullable(),
@@ -84,6 +89,7 @@ export const leaguePreviewSchema = z.object({
 export const leaguesResponseSchema = apiResponseSchema(paginatedSchema(leagueSchema));
 export const leagueResponseSchema = apiResponseSchema(leagueSchema);
 export const linkLeagueResponseSchema = apiResponseSchema(linkedLeagueSchema);
+export const deleteLeagueResponseSchema = apiResponseSchema(deletedLeagueSchema);
 export const leaguePreviewResponseSchema = apiResponseSchema(leaguePreviewSchema);
 
 export type LeagueListQuery = z.infer<typeof leagueListQuerySchema>;

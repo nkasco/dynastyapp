@@ -4,6 +4,7 @@ import {
   createNflverseImportRequestSchema,
   createSleeperImportRequestSchema,
   evaluateTradeRequestSchema,
+  deleteLeagueResponseSchema,
   importJobResponseSchema,
   importJobsResponseSchema,
   leagueResponseSchema,
@@ -82,6 +83,10 @@ export const apiClient = {
   player: (id: string) => apiFetch(`/api/players/${encodeURIComponent(id)}`, playerResponseSchema),
   leagues: (query?: Partial<LeagueListQuery>) => apiFetch(`/api/leagues${queryString(query)}`, leaguesResponseSchema),
   league: (id: string) => apiFetch(`/api/leagues/${encodeURIComponent(id)}`, leagueResponseSchema),
+  deleteLeague: (id: string) =>
+    apiFetch(`/api/leagues/${encodeURIComponent(id)}`, deleteLeagueResponseSchema, {
+      method: "DELETE",
+    }),
   updateLeagueSettings: (id: string, input: UpdateLeagueSettingsRequest) =>
     apiFetch(`/api/leagues/${encodeURIComponent(id)}`, leagueResponseSchema, {
       method: "PATCH",

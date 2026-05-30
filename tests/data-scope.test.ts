@@ -19,6 +19,7 @@ describe("data ownership boundaries", () => {
   it("passes authenticated user identity into league and player reads", () => {
     expect(source("app/api/leagues/route.ts")).toContain("listLeagues(query, user.id)");
     expect(source("app/api/leagues/[id]/route.ts")).toContain("getLeagueById(id, user.id)");
+    expect(source("app/api/leagues/[id]/route.ts")).toContain("deleteLeagueById(id, user.id)");
     expect(source("app/api/players/route.ts")).toContain("listPlayers(query, user.id)");
     expect(source("app/api/players/[id]/route.ts")).toContain("getPlayerById(id, user.id)");
   });
@@ -29,6 +30,7 @@ describe("data ownership boundaries", () => {
 
     expect(leagues).toContain("userLeagueTeams");
     expect(leagues).toContain("eq(userLeagueTeams.userId, userId)");
+    expect(leagues).toContain("deleteLeagueById");
     expect(players).toContain("userLeagueTeams");
     expect(players).toContain("eq(userLeagueTeams.userId, userId)");
   });

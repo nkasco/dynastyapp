@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   apiFailureSchema,
+  deleteLeagueResponseSchema,
   leaguePreviewResponseSchema,
   linkLeagueRequestSchema,
   playerListQuerySchema,
@@ -129,6 +130,24 @@ describe("API boundary", () => {
     expect(parsed.ok ? parsed.data.items[0]?.seasonSummary?.fantasyPointsPerGame : null).toBe(20.9);
   });
 
+  it("passes roster filter query params into the player browser", () => {
+    const playersPage = readFileSync(join(process.cwd(), "app/(app)/players/page.tsx"), "utf8");
+    const playerBrowser = readFileSync(join(process.cwd(), "src/components/players/player-browser.tsx"), "utf8");
+
+    expect(playersPage).toContain("searchParams");
+    expect(playersPage).toContain("initialQuery");
+    expect(playerBrowser).toContain("initialQuery?.leagueId");
+    expect(playerBrowser).toContain("initialQuery?.rosterId");
+  });
+
+  it("refreshes league-scoped Sleeper roster data from the player browser", () => {
+    const playerBrowser = readFileSync(join(process.cwd(), "src/components/players/player-browser.tsx"), "utf8");
+
+    expect(playerBrowser).toContain("sleeper-league-refresh");
+    expect(playerBrowser).toContain('scope: "league"');
+    expect(playerBrowser).not.toContain('scope: "players"');
+  });
+
   it("defines a consistent API error envelope", () => {
     expect(
       apiFailureSchema.parse({
@@ -176,5 +195,19 @@ describe("API boundary", () => {
 
     expect(parsed.ok).toBe(true);
     expect(parsed.ok ? parsed.data.rosters[0]?.ownerName : null).toBe("Nate");
+  });
+
+  it("defines a typed delete league response", () => {
+    const parsed = deleteLeagueResponseSchema.parse({
+      ok: true,
+      data: {
+        leagueId: "sleeper:123",
+        deletedLeagueData: false,
+      },
+      meta: { requestId: "request-id" },
+    });
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ok ? parsed.data.leagueId : null).toBe("sleeper:123");
   });
 });

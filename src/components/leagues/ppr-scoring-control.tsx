@@ -16,13 +16,21 @@ const pprOptions = [
 function sourceLabel(source: LeagueSummary["pprScoring"]["source"]) {
   switch (source) {
     case "sleeper":
-      return "Sleeper";
+      return "Detected from Sleeper scoring";
     case "profile":
-      return "Profile";
+      return "Saved profile preference";
     case "unknown":
     default:
-      return "Unknown";
+      return "Scoring needs review";
   }
+}
+
+function badgeLabel(scoring: LeagueSummary["pprScoring"]) {
+  if (scoring.value == null) {
+    return "Set PPR";
+  }
+
+  return scoring.label;
 }
 
 export function PprScoringControl({
@@ -40,8 +48,8 @@ export function PprScoringControl({
     <div className="grid gap-2 rounded-md border border-border/75 bg-muted/35 p-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold">{league.pprScoring.label}</div>
-          <div className="text-xs text-muted-foreground">{sourceLabel(league.pprScoring.source)} scoring</div>
+          <div className="text-xs font-medium uppercase text-muted-foreground">Scoring</div>
+          <div className="text-xs text-muted-foreground">{sourceLabel(league.pprScoring.source)}</div>
         </div>
         <Badge variant={league.pprScoring.source === "unknown" ? "outline" : "secondary"} className="shrink-0 gap-1">
           {league.pprScoring.source === "unknown" ? (
@@ -49,7 +57,7 @@ export function PprScoringControl({
           ) : (
             <Check className="size-3" aria-hidden="true" />
           )}
-          PPR
+          {badgeLabel(league.pprScoring)}
         </Badge>
       </div>
 
