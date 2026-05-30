@@ -86,11 +86,12 @@ async function delay(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function findActiveImportJob(input: Pick<NewImportJob, "source" | "scope" | "leagueId" | "season" | "week">) {
+async function findActiveImportJob(input: Pick<NewImportJob, "source" | "scope" | "leagueId" | "season" | "week" | "userId">) {
   const identity = importIdentity(input);
 
   return db.query.importJobs.findFirst({
     where: and(
+      nullableEq(importJobs.userId, input.userId ?? null),
       eq(importJobs.source, identity.source),
       nullableEq(importJobs.scope, identity.scope),
       nullableEq(importJobs.leagueId, identity.leagueId),
@@ -116,6 +117,7 @@ export async function createIdempotentImportJob(input: Omit<NewImportJob, "id" |
     id: randomUUID(),
     status: "queued" as const,
     error: null,
+    userId: null,
     leagueId: null,
     metadata: null,
     scope: null,

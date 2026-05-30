@@ -6,9 +6,9 @@ export const runtime = "nodejs";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireApiUser();
+    const user = await requireApiUser();
     const { id } = await params;
-    return apiOk(await getLeagueById(id));
+    return apiOk(await getLeagueById(id, user.id));
   } catch (error) {
     return handleApiError(error);
   }

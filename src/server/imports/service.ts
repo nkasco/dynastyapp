@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 
 import type { CreateNflverseImportRequest, CreateSleeperImportRequest } from "@/contracts/imports";
 import { db } from "@/server/db/client";
@@ -36,8 +36,9 @@ export async function createImportJob(input: Omit<NewImportJob, "id" | "status" 
   return mapImportJob(job);
 }
 
-export async function queueSleeperImport(input: CreateSleeperImportRequest) {
+export async function queueSleeperImport(input: CreateSleeperImportRequest, userId: string) {
   return createImportJob({
+    userId,
     source: "sleeper",
     scope: input.scope,
     leagueId: input.leagueId ?? null,
@@ -54,9 +55,9 @@ export async function queueNflverseImport(input: CreateNflverseImportRequest) {
   });
 }
 
-export async function getImportJob(id: string) {
+export async function getImportJob(id: string, userId: string) {
   const row = await db.query.importJobs.findFirst({
-    where: eq(importJobs.id, id),
+    where: and(eq(importJobs.id, id), or(isNull(importJobs.userId), eq(importJobs.userId, userId))),
   });
 
   if (!row) {

@@ -124,17 +124,17 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
   - [x] Track unmapped players.
   - [x] Show source freshness in the UI.
 
-- [ ] Phase 9: Players page
-  - [ ] Build `/players` route.
-  - [ ] Add searchable player grid/list.
-  - [ ] Add filters for position, team, fantasy relevance, rostered status, age, and injury.
-  - [ ] Add sorting by name, age, position, production, and roster exposure.
-  - [ ] Build premium player card component.
-  - [ ] Add card stats, trend sparkline, badges, and team-color accents.
-  - [ ] Add responsive desktop/mobile layouts.
-  - [ ] Add empty, loading, and error states.
+- [x] Phase 9: Players page
+  - [x] Build `/players` route.
+  - [x] Add searchable player grid/list.
+  - [x] Add filters for position, team, fantasy relevance, rostered status, age, and injury.
+  - [x] Add sorting by name, age, position, production, and roster exposure.
+  - [x] Build premium player card component.
+  - [x] Add card stats, trend sparkline, badges, and team-color accents.
+  - [x] Add responsive desktop/mobile layouts.
+  - [x] Add empty, loading, and error states.
 
-  **Milestone M6: Player Browser Usable**
+  **Milestone M6: Player Browser Usable** ✅
 
 - [ ] Phase 10: Player detail analytics
   - [ ] Build `/players/[id]` route.

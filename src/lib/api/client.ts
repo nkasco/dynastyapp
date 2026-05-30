@@ -36,7 +36,7 @@ export class ApiClientError extends Error {
   }
 }
 
-function queryString(query?: Record<string, string | number | undefined>) {
+function queryString(query?: Record<string, string | number | boolean | undefined>) {
   const params = new URLSearchParams();
 
   for (const [key, value] of Object.entries(query ?? {})) {

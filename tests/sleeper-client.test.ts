@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SleeperClient, SleeperHttpError } from "@/server/sleeper/service";
+import { shouldImportSleeperPlayersForScope, SleeperClient, SleeperHttpError } from "@/server/sleeper/service";
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
@@ -50,6 +50,13 @@ describe("Sleeper client", () => {
       temporary: true,
       status: 429,
     } satisfies Partial<SleeperHttpError>);
+  });
+});
+
+describe("Sleeper import scope routing", () => {
+  it("hydrates player identity before league-link roster imports", () => {
+    expect(shouldImportSleeperPlayersForScope("league-link")).toBe(true);
+    expect(shouldImportSleeperPlayersForScope("league")).toBe(false);
   });
 });
 

@@ -508,6 +508,7 @@ export const importJobs = sqliteTable(
   "import_jobs",
   {
     id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     source: text("source", { enum: ["sleeper", "nflverse", "bootstrap", "system"] }).notNull(),
     status: text("status", { enum: ["queued", "running", "succeeded", "failed", "partial"] }).notNull(),
     scope: text("scope"),
@@ -523,6 +524,7 @@ export const importJobs = sqliteTable(
     updatedAt: updatedAt(),
   },
   (table) => [
+    index("import_jobs_user_idx").on(table.userId, table.createdAt),
     index("import_jobs_status_idx").on(table.status, table.createdAt),
     index("import_jobs_source_scope_idx").on(table.source, table.scope, table.season, table.week),
     index("import_jobs_league_idx").on(table.leagueId),

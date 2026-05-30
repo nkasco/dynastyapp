@@ -90,6 +90,9 @@ Testing rules:
 - Unit tests should cover pure parsing, mapping, scoring, aggregation, contract validation, and error classification.
 - Integration tests should cover route handlers, service-to-database writes, import job state transitions, idempotency, and warning/failure persistence.
 - UI work should include tests or browser verification for the actual route, responsive states, loading/error/empty states, and important user interactions.
+- Browser verification should prefer the Browser plugin / in-app browser (`@Browser`) because it uses the same local app session the user is seeing.
+- Do not use the separate Playwright MCP server for routine UI verification when `@Browser` is available. Use it only as an explicit fallback when Browser plugin access is unavailable or insufficient, and record that fallback reason in the work summary.
+- Browser verification should not leave `.playwright-mcp` snapshots, console logs, or other generated browser artifacts in the working tree.
 - External data integrations must be tested against representative saved fixtures and, before being declared done, against the actual source payload whenever network access is available.
 - For Sleeper and nflverse import phases, a mocked test alone is not enough. The implementation must also prove it can handle a real source response end-to-end: fetch, validate, persist, summarize counts, surface warnings, and keep source access read-only.
 - If live source testing cannot run because of missing credentials, network restrictions, source downtime, or rate limiting, the phase must stay incomplete or be explicitly labeled blocked/partial with the exact missing verification.
@@ -131,6 +134,11 @@ Core schema areas:
 - Operations: import jobs, import locks, source snapshots, warning queue, app settings
 
 ## Data Sources
+
+Data ownership is split by source:
+
+- nflverse data is shared across all users. Weekly stats, season aggregates, player ID bridges, and derived fantasy summaries are canonical football history and should not be duplicated per profile.
+- Sleeper league and roster context is scoped to the user profiles that linked it. Store canonical Sleeper player identity once, but expose league metadata, rosters, roster exposure, transactions, picks, and import status only through the user's linked league/team records.
 
 ### Sleeper
 

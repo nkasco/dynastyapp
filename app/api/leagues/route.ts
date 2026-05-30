@@ -7,10 +7,10 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
-    await requireApiUser();
+    const user = await requireApiUser();
     const url = new URL(request.url);
     const query = leagueListQuerySchema.parse(Object.fromEntries(url.searchParams));
-    return apiOk(await listLeagues(query));
+    return apiOk(await listLeagues(query, user.id));
   } catch (error) {
     return handleApiError(error);
   }

@@ -257,6 +257,10 @@ export function getSleeperServiceStatus() {
   };
 }
 
+export function shouldImportSleeperPlayersForScope(scope: string | null | undefined) {
+  return scope === "players" || scope === "full" || scope === "league-link" || scope == null;
+}
+
 function normalizeSearchName(player: SleeperPlayer) {
   return (player.search_full_name ?? player.full_name ?? `${player.first_name ?? ""} ${player.last_name ?? ""}`)
     .trim()
@@ -397,13 +401,16 @@ async function ensurePlaceholderPlayers(playerIds: string[], timestamp: Date) {
   return missing.length;
 }
 
-export async function importSleeperPlayers(client = new SleeperClient()): Promise<{
+export async function importSleeperPlayers(
+  client = new SleeperClient(),
+  options: { force?: boolean } = {},
+): Promise<{
   counts: ImportCounts;
   warnings: string[];
 }> {
   const lastImportedAt = await appSettingDate("sleeper.players.lastImportedAt");
 
-  if (lastImportedAt && Date.now() - lastImportedAt.getTime() < DAY_MS) {
+  if (!options.force && lastImportedAt && Date.now() - lastImportedAt.getTime() < DAY_MS) {
     return {
       counts: { playersSkipped: 1 },
       warnings: [],
@@ -1008,8 +1015,8 @@ export async function importSleeperJob(job: ImportJob) {
   const jobMetadata = (job.metadata ?? {}) as Record<string, unknown>;
   const hasLeagueTarget = Boolean(job.leagueId || typeof jobMetadata.sleeperLeagueId === "string");
 
-  if (job.scope === "players" || job.scope === "full" || job.scope == null) {
-    const result = await importSleeperPlayers(client);
+  if (shouldImportSleeperPlayersForScope(job.scope)) {
+    const result = await importSleeperPlayers(client, { force: job.scope === "league-link" });
     Object.assign(counts, result.counts);
     warnings.push(...result.warnings);
   }

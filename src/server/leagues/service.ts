@@ -60,14 +60,20 @@ function leagueOrder(query: LeagueListQuery) {
   }
 }
 
-export async function listLeagues(query: LeagueListQuery) {
-  const where = leagueWhere(query);
+export async function listLeagues(query: LeagueListQuery, userId: string) {
+  const filters = [eq(userLeagueTeams.userId, userId), leagueWhere(query)].filter(Boolean) as SQL[];
+  const where = and(...filters);
   const offset = (query.page - 1) * query.pageSize;
 
-  const [totalRow] = await db.select({ value: count() }).from(leagues).where(where);
-  const rows = await db
-    .select()
+  const [totalRow] = await db
+    .select({ value: count() })
     .from(leagues)
+    .innerJoin(userLeagueTeams, eq(userLeagueTeams.leagueId, leagues.id))
+    .where(where);
+  const rows = await db
+    .select({ league: leagues })
+    .from(leagues)
+    .innerJoin(userLeagueTeams, eq(userLeagueTeams.leagueId, leagues.id))
     .where(where)
     .orderBy(leagueOrder(query), asc(leagues.name))
     .limit(query.pageSize)
@@ -76,7 +82,7 @@ export async function listLeagues(query: LeagueListQuery) {
   const total = totalRow?.value ?? 0;
 
   return {
-    items: await Promise.all(rows.map(mapLeague)),
+    items: await Promise.all(rows.map((row) => mapLeague(row.league))),
     pagination: {
       page: query.page,
       pageSize: query.pageSize,
@@ -86,16 +92,19 @@ export async function listLeagues(query: LeagueListQuery) {
   };
 }
 
-export async function getLeagueById(id: string) {
-  const row = await db.query.leagues.findFirst({
-    where: eq(leagues.id, id),
-  });
+export async function getLeagueById(id: string, userId: string) {
+  const [row] = await db
+    .select({ league: leagues })
+    .from(leagues)
+    .innerJoin(userLeagueTeams, eq(userLeagueTeams.leagueId, leagues.id))
+    .where(and(eq(leagues.id, id), eq(userLeagueTeams.userId, userId)))
+    .limit(1);
 
   if (!row) {
     throw new ApiError("NOT_FOUND", "League not found.");
   }
 
-  return mapLeague(row);
+  return mapLeague(row.league);
 }
 
 function leagueIdFromSleeper(sleeperLeagueId: string) {
@@ -234,6 +243,7 @@ export async function queueLeagueLink(input: LinkLeagueRequest, userId: string) 
     source: "sleeper",
     scope: "league-link",
     leagueId,
+    userId,
     metadata: { sleeperLeagueId: input.sleeperLeagueId, selectedRosterId: input.rosterId },
   });
 
