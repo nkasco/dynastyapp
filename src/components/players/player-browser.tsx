@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, ArrowDownAZ, Filter, Loader2, RefreshCw, Search, Shield, SlidersHorizontal, Trophy, TrendingUp, Users } from "lucide-react";
+import Image from "next/image";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -187,6 +188,10 @@ function statusTone(status: string | null) {
   return "border-chart-4/35 bg-chart-4/10 text-foreground";
 }
 
+function visibleStatus(status: string | null) {
+  return status && !status.toLowerCase().includes("active") ? status : null;
+}
+
 function trendAverage(player: PlayerSummary) {
   if (player.trend.length === 0) {
     return null;
@@ -221,6 +226,39 @@ function draftLine(player: PlayerSummary) {
   return `${player.draftInfo.year} NFL | R${player.draftInfo.round} P${player.draftInfo.pick}`;
 }
 
+function playerInitials(player: PlayerSummary) {
+  const first = player.firstName?.[0] ?? player.fullName[0] ?? "?";
+  const last = player.lastName?.[0] ?? player.fullName.split(/\s+/)[1]?.[0] ?? "";
+  return `${first}${last}`.toUpperCase();
+}
+
+function PlayerHeadshot({ player, accentClassName }: { player: PlayerSummary; accentClassName: string }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const imageUrl = player.imageUrl;
+  const showImage = Boolean(imageUrl && failedUrl !== imageUrl);
+
+  return (
+    <div className="relative size-16 shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/45 shadow-xs">
+      {imageUrl && showImage ? (
+        <Image
+          src={imageUrl}
+          alt={`${player.fullName} headshot`}
+          width={64}
+          height={64}
+          unoptimized
+          className="size-full object-cover object-top"
+          onError={() => setFailedUrl(imageUrl)}
+        />
+      ) : (
+        <div className="grid size-full place-items-center bg-muted/55 text-sm font-semibold text-muted-foreground">
+          {playerInitials(player)}
+        </div>
+      )}
+      <div className={cn("absolute inset-x-0 bottom-0 h-1", accentClassName)} aria-hidden="true" />
+    </div>
+  );
+}
+
 function PlayerCard({ player, activeLeague }: { player: PlayerSummary; activeLeague: LeagueSummary | null }) {
   const exposure = player.rosterExposure.rosteredCount;
   const holder = rosterHolder(player);
@@ -228,6 +266,7 @@ function PlayerCard({ player, activeLeague }: { player: PlayerSummary; activeLea
   const average = trendAverage(player);
   const games = player.seasonSummary?.games;
   const totalPoints = player.seasonSummary?.fantasyPoints;
+  const status = visibleStatus(player.status);
 
   return (
     <article
@@ -241,27 +280,32 @@ function PlayerCard({ player, activeLeague }: { player: PlayerSummary; activeLea
 
       <div className="relative grid h-full content-between gap-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <div className="flex min-w-0 items-center gap-2">
-              <h2 className="truncate text-base font-semibold leading-6 text-card-foreground">{player.fullName}</h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <Badge variant="outline" className={cn("h-6 border font-semibold", tone.badge)}>
-                {player.position ?? "UNK"}
-              </Badge>
-              <Badge
-                variant="outline"
-                className="h-6 border font-semibold"
-                style={teamTagStyle(player.team)}
-              >
-                {player.team ?? "FA"}
-              </Badge>
-              <Badge variant="outline" className="h-6 border-border/70 bg-muted/45 text-muted-foreground">
-                {player.age != null ? `${formatNumber(player.age, 1)} yrs` : "age -"}
-              </Badge>
-              <Badge variant="outline" className={cn("h-6 border", statusTone(player.status))}>
-                {player.status ?? "status -"}
-              </Badge>
+          <div className="flex min-w-0 items-start gap-3">
+            <PlayerHeadshot player={player} accentClassName={tone.rail} />
+            <div className="min-w-0 space-y-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <h2 className="truncate text-base font-semibold leading-6 text-card-foreground">{player.fullName}</h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <Badge variant="outline" className={cn("h-6 border font-semibold", tone.badge)}>
+                  {player.position ?? "UNK"}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="h-6 border font-semibold"
+                  style={teamTagStyle(player.team)}
+                >
+                  {player.team ?? "FA"}
+                </Badge>
+                <Badge variant="outline" className="h-6 border-border/70 bg-muted/45 text-muted-foreground">
+                  {player.age != null ? `${formatNumber(player.age, 1)} yrs` : "age -"}
+                </Badge>
+                {status ? (
+                  <Badge variant="outline" className={cn("h-6 border", statusTone(status))}>
+                    {status}
+                  </Badge>
+                ) : null}
+              </div>
             </div>
           </div>
           <div className="shrink-0 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-right text-primary">

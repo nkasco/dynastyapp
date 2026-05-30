@@ -75,6 +75,7 @@ export const playerSchema = z.object({
   status: z.string().nullable(),
   age: z.number().nullable(),
   fantasyPositions: z.array(z.string()).nullable(),
+  imageUrl: z.string().nullable(),
   rosterExposure: playerRosterExposureSchema,
   seasonSummary: playerSeasonSummarySchema.nullable(),
   trend: z.array(playerTrendPointSchema),

@@ -16,6 +16,7 @@ import {
   weeklyStats,
 } from "@/server/db/schema";
 import { ApiError } from "@/server/api/errors";
+import { cachedPlayerImageIds, espnIdFromMetadata, localPlayerImageUrl } from "@/server/players/images";
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
@@ -196,7 +197,10 @@ function mapPlayer(input: {
   summary: SeasonSummary | null;
   trend: TrendPoint[];
   draftInfo: DraftInfo | null;
+  cachedImageIds: Set<string>;
 }) {
+  const espnId = espnIdFromMetadata(input.row.metadata);
+
   return {
     sleeperPlayerId: input.row.sleeperPlayerId,
     fullName: input.row.fullName,
@@ -207,6 +211,7 @@ function mapPlayer(input: {
     status: input.row.status,
     age: input.row.age,
     fantasyPositions: input.row.fantasyPositions,
+    imageUrl: espnId && input.cachedImageIds.has(espnId) ? localPlayerImageUrl(espnId) : null,
     rosterExposure: input.exposure,
     seasonSummary: input.summary,
     trend: input.trend,
@@ -324,6 +329,7 @@ async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId: string
   const seasonMap = new Map<string, SeasonSummary>();
   const trendMap = new Map<string, TrendPoint[]>();
   const draftInfoMap = new Map<string, DraftInfo>();
+  const cachedImageIds = await cachedPlayerImageIds();
 
   for (const row of rows) {
     exposureMap.set(row.sleeperPlayerId, { rosteredCount: 0, leagueCount: 0, labels: [] });
@@ -482,6 +488,7 @@ async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId: string
       summary: seasonMap.get(row.sleeperPlayerId) ?? null,
       trend: [...(trendMap.get(row.sleeperPlayerId) ?? [])].reverse(),
       draftInfo: draftInfoMap.get(row.sleeperPlayerId) ?? null,
+      cachedImageIds,
     }),
   );
 }
