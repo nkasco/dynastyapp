@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { importLockKey, isTemporaryImportError } from "@/server/imports/runner";
+import { importLockKey, isTemporaryImportError, nightlyNflverseImportJobInput } from "@/server/imports/runner";
 
 describe("import runner", () => {
   it("builds stable lock keys from an import identity", () => {
@@ -30,5 +30,21 @@ describe("import runner", () => {
     expect(isTemporaryImportError(new Error("HTTP 503 from source"))).toBe(true);
     expect(isTemporaryImportError(Object.assign(new Error("try later"), { temporary: true }))).toBe(true);
     expect(isTemporaryImportError(new Error("invalid payload shape"))).toBe(false);
+  });
+
+  it("lets nightly nflverse imports discover the latest source seasons", () => {
+    const input = nightlyNflverseImportJobInput(new Date("2026-05-30T12:00:00-04:00"));
+
+    expect(input).toMatchObject({
+      source: "nflverse",
+      scope: "full",
+      metadata: {
+        cadence: "nightly",
+        seasonHint: 2026,
+      },
+    });
+    expect(input).not.toHaveProperty("season");
+    expect(input).not.toHaveProperty("week");
+    expect(input.metadata).not.toHaveProperty("seasons");
   });
 });

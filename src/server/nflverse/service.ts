@@ -26,6 +26,7 @@ const DEFAULT_WRITE_BATCH_SIZE = 250;
 const DEFAULT_IMPORT_SEASONS = 10;
 const MAX_WARNING_MESSAGES = 25;
 const FF_PLAYER_IDS_URL = "https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv";
+const STATS_PLAYER_RELEASE_API_URL = "https://api.github.com/repos/nflverse/nflverse-data/releases/tags/stats_player";
 
 const nflversePlayerIdSchema = z
   .object({
@@ -47,6 +48,7 @@ const nflverseWeeklyStatSchema = z
     season: z.coerce.number().int(),
     week: z.coerce.number().int(),
     season_type: z.string().nullish(),
+    team: z.string().nullish(),
     recent_team: z.string().nullish(),
     opponent_team: z.string().nullish(),
     position: z.string().nullish(),
@@ -170,7 +172,9 @@ function statPayload(row: Record<string, unknown>) {
     }
 
     const numeric = numberValue(value);
-    stats[key] = numeric ?? stringValue(value);
+    if (numeric != null) {
+      stats[key] = numeric;
+    }
   }
 
   return stats;
@@ -268,6 +272,17 @@ export class NflverseClient {
     return csvRows(await response.text()).map((row) => schema.parse(row));
   }
 
+  private async getJsonUrl<T>(url: string, schema: z.ZodType<T>) {
+    const fetcher = this.options.fetcher ?? fetch;
+    const response = await fetcher(url);
+
+    if (!response.ok) {
+      throw new NflverseHttpError(`nflverse request failed with HTTP ${response.status} for ${url}.`, response.status);
+    }
+
+    return schema.parse(await response.json());
+  }
+
   private async getCsv<T>(release: string, fileName: string, schema: z.ZodType<T>) {
     const baseUrl = this.options.baseUrl ?? env.NFLVERSE_BASE_URL;
     return this.getCsvUrl(sourceUrl(baseUrl, release, fileName), schema);
@@ -277,8 +292,47 @@ export class NflverseClient {
     return this.getCsvUrl(FF_PLAYER_IDS_URL, nflversePlayerIdSchema);
   }
 
-  getWeeklyStats() {
-    return this.getCsv("player_stats", "player_stats.csv", nflverseWeeklyStatSchema);
+  private async getStatsPlayerAssetNames() {
+    const release = await this.getJsonUrl(
+      STATS_PLAYER_RELEASE_API_URL,
+      z.object({
+        assets_url: z.string().url(),
+      }),
+    );
+    const assetSchema = z.array(z.object({ name: z.string() }));
+    const assetNames: string[] = [];
+
+    for (let page = 1; page <= 10; page += 1) {
+      const assets = await this.getJsonUrl(`${release.assets_url}?per_page=100&page=${page}`, assetSchema);
+      assetNames.push(...assets.map((asset) => asset.name));
+
+      if (assets.length < 100) {
+        break;
+      }
+    }
+
+    return assetNames;
+  }
+
+  async getAvailableWeeklyStatSeasons() {
+    const assetNames = await this.getStatsPlayerAssetNames();
+
+    return assetNames
+      .flatMap((name) => {
+        const match = /^stats_player_week_(\d{4})\.csv$/.exec(name);
+        return match ? [Number(match[1])] : [];
+      })
+      .filter((season) => Number.isInteger(season))
+      .sort((left, right) => right - left);
+  }
+
+  async getWeeklyStats(seasons?: number[] | null) {
+    const selectedSeasons = seasons ?? (await this.getAvailableWeeklyStatSeasons()).slice(0, DEFAULT_IMPORT_SEASONS);
+    const rows = await Promise.all(
+      selectedSeasons.map((season) => this.getCsv("stats_player", `stats_player_week_${season}.csv`, nflverseWeeklyStatSchema)),
+    );
+
+    return rows.flat();
   }
 }
 
@@ -483,7 +537,7 @@ function normalizeWeeklyRow(row: NflverseWeeklyStat, map: Map<string, string>) {
     season: row.season,
     week: row.week,
     seasonType,
-    team: stringValue(row.recent_team),
+    team: stringValue(row.recent_team) ?? stringValue(row.team),
     opponent: stringValue(row.opponent_team),
     position: stringValue(row.position),
     stats,
@@ -502,7 +556,7 @@ async function importStats(input: {
   writeSeason: boolean;
 }) {
   const map = await gsisToSleeperMap();
-  const sourceRows = await input.client.getWeeklyStats();
+  const sourceRows = await input.client.getWeeklyStats(input.seasons);
   const seasons = input.seasons ?? latestAvailableSeasons(sourceRows);
   const weeklyRows = sourceRows
     .filter((row) => seasons.includes(row.season))
@@ -574,7 +628,8 @@ async function importStats(input: {
     sourceKey: `player_stats:${seasons.join(",")}${input.week ? `:week:${input.week}` : ""}`,
     week: input.week ?? null,
     payload: {
-      url: sourceUrl(env.NFLVERSE_BASE_URL, "player_stats", "player_stats.csv"),
+      url: STATS_PLAYER_RELEASE_API_URL,
+      weeklyUrlPattern: sourceUrl(env.NFLVERSE_BASE_URL, "stats_player", "stats_player_week_{season}.csv"),
       seasons,
       week: input.week ?? null,
       rowsSeen: weeklyRows.length,
