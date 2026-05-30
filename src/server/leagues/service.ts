@@ -230,6 +230,35 @@ export async function updateLeagueSettings(id: string, input: UpdateLeagueSettin
   return getLeagueById(id, userId);
 }
 
+export async function deleteLeagueById(id: string, userId: string) {
+  const existing = await db
+    .select({ leagueId: userLeagueTeams.leagueId })
+    .from(userLeagueTeams)
+    .where(and(eq(userLeagueTeams.leagueId, id), eq(userLeagueTeams.userId, userId)))
+    .limit(1);
+
+  if (!existing[0]) {
+    throw new ApiError("NOT_FOUND", "League not found.");
+  }
+
+  await db.delete(userLeagueTeams).where(and(eq(userLeagueTeams.leagueId, id), eq(userLeagueTeams.userId, userId)));
+
+  const [remainingLinkedUsers] = await db
+    .select({ value: count() })
+    .from(userLeagueTeams)
+    .where(eq(userLeagueTeams.leagueId, id));
+  const deletedLeagueData = (remainingLinkedUsers?.value ?? 0) === 0;
+
+  if (deletedLeagueData) {
+    await db.delete(leagues).where(eq(leagues.id, id));
+  }
+
+  return {
+    leagueId: id,
+    deletedLeagueData,
+  };
+}
+
 function leagueIdFromSleeper(sleeperLeagueId: string) {
   return `sleeper:${sleeperLeagueId}`;
 }

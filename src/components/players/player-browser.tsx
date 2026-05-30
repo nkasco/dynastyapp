@@ -1,8 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, ArrowDownAZ, Filter, Loader2, Search, Shield, SlidersHorizontal, Star, Trophy, TrendingUp, Users } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
+import { Activity, ArrowDownAZ, Filter, Loader2, RefreshCw, Search, Shield, SlidersHorizontal, Trophy, TrendingUp, Users } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,47 @@ const sortOptions: Array<{ label: string; value: PlayerListQuery["sort"]; icon: 
   { label: "Age", value: "age", icon: Activity },
 ];
 
+const nflTeamColors: Record<string, { background: string; border: string; text: string }> = {
+  ARI: { background: "#97233F", border: "#FFB612", text: "#FFFFFF" },
+  ATL: { background: "#A71930", border: "#A5ACAF", text: "#FFFFFF" },
+  BAL: { background: "#241773", border: "#9E7C0C", text: "#FFFFFF" },
+  BUF: { background: "#00338D", border: "#C60C30", text: "#FFFFFF" },
+  CAR: { background: "#0085CA", border: "#101820", text: "#FFFFFF" },
+  CHI: { background: "#0B162A", border: "#C83803", text: "#FFFFFF" },
+  CIN: { background: "#FB4F14", border: "#000000", text: "#111111" },
+  CLE: { background: "#311D00", border: "#FF3C00", text: "#FFFFFF" },
+  DAL: { background: "#003594", border: "#869397", text: "#FFFFFF" },
+  DEN: { background: "#FB4F14", border: "#002244", text: "#111111" },
+  DET: { background: "#0076B6", border: "#B0B7BC", text: "#FFFFFF" },
+  GB: { background: "#203731", border: "#FFB612", text: "#FFFFFF" },
+  HOU: { background: "#03202F", border: "#A71930", text: "#FFFFFF" },
+  IND: { background: "#002C5F", border: "#A2AAAD", text: "#FFFFFF" },
+  JAX: { background: "#006778", border: "#D7A22A", text: "#FFFFFF" },
+  KC: { background: "#E31837", border: "#FFB81C", text: "#FFFFFF" },
+  LAC: { background: "#0080C6", border: "#FFC20E", text: "#FFFFFF" },
+  LAR: { background: "#003594", border: "#FFA300", text: "#FFFFFF" },
+  LV: { background: "#000000", border: "#A5ACAF", text: "#FFFFFF" },
+  MIA: { background: "#008E97", border: "#FC4C02", text: "#FFFFFF" },
+  MIN: { background: "#4F2683", border: "#FFC62F", text: "#FFFFFF" },
+  NE: { background: "#002244", border: "#C60C30", text: "#FFFFFF" },
+  NO: { background: "#D3BC8D", border: "#101820", text: "#111111" },
+  NYG: { background: "#0B2265", border: "#A71930", text: "#FFFFFF" },
+  NYJ: { background: "#125740", border: "#FFFFFF", text: "#FFFFFF" },
+  PHI: { background: "#004C54", border: "#A5ACAF", text: "#FFFFFF" },
+  PIT: { background: "#FFB612", border: "#101820", text: "#111111" },
+  SEA: { background: "#002244", border: "#69BE28", text: "#FFFFFF" },
+  SF: { background: "#AA0000", border: "#B3995D", text: "#FFFFFF" },
+  TB: { background: "#D50A0A", border: "#FF7900", text: "#FFFFFF" },
+  TEN: { background: "#4B92DB", border: "#C8102E", text: "#FFFFFF" },
+  WAS: { background: "#5A1414", border: "#FFB612", text: "#FFFFFF" },
+};
+
+type PlayerBrowserInitialQuery = {
+  leagueId?: string;
+  rosterId?: string;
+  rostered?: boolean;
+};
+
 function errorMessage(error: unknown) {
   if (error instanceof ApiClientError) {
     return error.error.message;
@@ -49,6 +90,21 @@ function formatNumber(value: number | null | undefined, digits = 0) {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits,
   }).format(value);
+}
+
+function teamTagStyle(team: string | null) {
+  const colors = team ? nflTeamColors[team] : null;
+
+  if (!colors) {
+    return undefined;
+  }
+
+  return {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    color: colors.text,
+    boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${colors.border} 65%, transparent)`,
+  };
 }
 
 function playerLine(player: PlayerSummary) {
@@ -73,13 +129,80 @@ function playerLine(player: PlayerSummary) {
   return `${formatNumber(player.seasonSummary?.fantasyPoints, 1)} pts`;
 }
 
-function trendBars(player: PlayerSummary) {
+function positionTone(position: string | null) {
+  switch (position) {
+    case "QB":
+      return {
+        rail: "bg-chart-5",
+        badge: "border-chart-5/35 bg-chart-5/15 text-foreground",
+        glow: "from-chart-5/12",
+        bar: "bg-chart-5",
+      };
+    case "RB":
+      return {
+        rail: "bg-chart-3",
+        badge: "border-chart-3/35 bg-chart-3/15 text-foreground",
+        glow: "from-chart-3/12",
+        bar: "bg-chart-3",
+      };
+    case "WR":
+      return {
+        rail: "bg-primary",
+        badge: "border-primary/35 bg-primary/15 text-primary",
+        glow: "from-primary/12",
+        bar: "bg-primary",
+      };
+    case "TE":
+      return {
+        rail: "bg-chart-4",
+        badge: "border-chart-4/40 bg-chart-4/15 text-foreground",
+        glow: "from-chart-4/14",
+        bar: "bg-chart-4",
+      };
+    default:
+      return {
+        rail: "bg-muted-foreground",
+        badge: "border-border bg-muted/70 text-foreground",
+        glow: "from-muted/40",
+        bar: "bg-muted-foreground",
+      };
+  }
+}
+
+function statusTone(status: string | null) {
+  if (!status) {
+    return "border-border/70 bg-muted/45 text-muted-foreground";
+  }
+
+  const normalized = status.toLowerCase();
+
+  if (normalized.includes("active")) {
+    return "border-accent/35 bg-accent/10 text-accent";
+  }
+
+  if (normalized.includes("injured") || normalized.includes("ir") || normalized.includes("out")) {
+    return "border-destructive/35 bg-destructive/10 text-destructive";
+  }
+
+  return "border-chart-4/35 bg-chart-4/10 text-foreground";
+}
+
+function trendAverage(player: PlayerSummary) {
+  if (player.trend.length === 0) {
+    return null;
+  }
+
+  const total = player.trend.reduce((sum, point) => sum + (point.fantasyPoints ?? 0), 0);
+  return total / player.trend.length;
+}
+
+function trendBars(player: PlayerSummary, barClassName: string) {
   const max = Math.max(...player.trend.map((point) => point.fantasyPoints ?? 0), 1);
 
   return player.trend.map((point, index) => (
     <span
       key={`${player.sleeperPlayerId}-${point.week}-${index}`}
-      className="bg-primary/70 block w-2 rounded-sm"
+      className={cn("block w-2 rounded-sm shadow-xs", barClassName)}
       style={{ height: `${Math.max(16, ((point.fantasyPoints ?? 0) / max) * 42)}px` }}
       title={`Week ${point.week}: ${formatNumber(point.fantasyPoints, 1)} pts`}
     />
@@ -101,84 +224,120 @@ function draftLine(player: PlayerSummary) {
 function PlayerCard({ player, activeLeague }: { player: PlayerSummary; activeLeague: LeagueSummary | null }) {
   const exposure = player.rosterExposure.rosteredCount;
   const holder = rosterHolder(player);
+  const tone = positionTone(player.position);
+  const average = trendAverage(player);
+  const games = player.seasonSummary?.games;
+  const totalPoints = player.seasonSummary?.fantasyPoints;
 
   return (
-    <article className="grid min-h-[218px] content-between rounded-lg border border-border/80 bg-card p-4 shadow-xs">
-      <div className="space-y-4">
+    <article
+      className={cn(
+        "group relative grid min-h-[282px] overflow-hidden rounded-lg border border-border/80 bg-card p-4 shadow-xs transition-[border-color,box-shadow,transform]",
+        "hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md",
+      )}
+    >
+      <div className={cn("absolute inset-x-0 top-0 h-1", tone.rail)} aria-hidden="true" />
+      <div className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent opacity-80", tone.glow)} aria-hidden="true" />
+
+      <div className="relative grid h-full content-between gap-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <div className="flex min-w-0 items-center gap-2">
-              <h2 className="truncate text-base font-semibold text-card-foreground">{player.fullName}</h2>
-              {player.badges.includes("production") ? <Star className="size-4 shrink-0 text-chart-4" aria-hidden="true" /> : null}
+              <h2 className="truncate text-base font-semibold leading-6 text-card-foreground">{player.fullName}</h2>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary">{player.position ?? "UNK"}</Badge>
-              <span>{player.team ?? "FA"}</span>
-              <span>{player.age != null ? `${formatNumber(player.age, 1)} yrs` : "age -"}</span>
-              {player.status ? <span>{player.status}</span> : null}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <Badge variant="outline" className={cn("h-6 border font-semibold", tone.badge)}>
+                {player.position ?? "UNK"}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="h-6 border font-semibold"
+                style={teamTagStyle(player.team)}
+              >
+                {player.team ?? "FA"}
+              </Badge>
+              <Badge variant="outline" className="h-6 border-border/70 bg-muted/45 text-muted-foreground">
+                {player.age != null ? `${formatNumber(player.age, 1)} yrs` : "age -"}
+              </Badge>
+              <Badge variant="outline" className={cn("h-6 border", statusTone(player.status))}>
+                {player.status ?? "status -"}
+              </Badge>
             </div>
           </div>
-          <div className="rounded-md bg-primary/10 px-2.5 py-1.5 text-right text-primary">
-            <div className="text-lg font-semibold">{formatNumber(player.seasonSummary?.fantasyPointsPerGame, 1)}</div>
-            <div className="text-[10px] uppercase tracking-normal">
-              {player.seasonSummary ? `${player.seasonSummary.scoringLabel}/G` : "PTS/G"}
+          <div className="shrink-0 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-right text-primary">
+            <div className="text-xl font-semibold leading-none">{formatNumber(player.seasonSummary?.fantasyPointsPerGame, 1)} pts</div>
+            <div className="mt-1 text-[10px] font-medium uppercase tracking-normal">
+              {player.seasonSummary?.scoringLabel ?? "PTS/G"}
             </div>
           </div>
         </div>
 
-        <div className="grid gap-2 text-sm">
-          <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
-            <span className="text-muted-foreground">Season</span>
-            <span className="font-medium">{player.seasonSummary?.season ?? "-"}</span>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-md border border-border/55 bg-muted/35 px-3 py-2">
+            <div className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Season</div>
+            <div className="mt-1 font-semibold">
+              {player.seasonSummary?.season ?? "-"}
+              {games != null ? <span className="font-normal text-muted-foreground"> | {games} games</span> : null}
+            </div>
           </div>
-          <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
-            <span className="text-muted-foreground">Line</span>
-            <span className="truncate text-right font-medium">{playerLine(player)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
-            <span className="text-muted-foreground">Draft</span>
-            <span className="truncate text-right font-medium">{draftLine(player)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-4 rounded-md bg-muted/55 px-3 py-2">
-            <span className="text-muted-foreground">{activeLeague ? "Held by" : "Exposure"}</span>
-            <span className="min-w-0 truncate text-right font-medium">
+          <div className="rounded-md border border-border/55 bg-muted/35 px-3 py-2">
+            <div className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              {activeLeague ? "Held by" : "Exposure"}
+            </div>
+            <div className="mt-1 truncate font-semibold">
               {activeLeague
                 ? holder ?? "Free agent"
                 : exposure > 0
                   ? `${exposure} roster${exposure === 1 ? "" : "s"}`
                   : "Free agent"}
-            </span>
+            </div>
+          </div>
+          <div className="col-span-2 rounded-md border border-border/55 bg-muted/35 px-3 py-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Season line</div>
+                <div className="mt-1 truncate font-semibold">{playerLine(player)}</div>
+              </div>
+              <Activity className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </div>
+          </div>
+          <div className="col-span-2 flex items-center justify-between gap-3 rounded-md border border-border/55 bg-muted/35 px-3 py-2">
+            <div className="min-w-0">
+              <div className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Draft profile</div>
+              <div className="mt-1 truncate font-semibold">{draftLine(player)}</div>
+            </div>
+            <Shield className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </div>
         </div>
-      </div>
 
-      <div className="mt-4 flex items-end justify-between gap-4">
-        <div className="flex min-w-0 flex-wrap gap-1.5">
-          {player.badges.slice(0, 3).map((badge) => (
-            <Badge key={badge} variant="outline" className="max-w-28 truncate">
-              {badge}
-            </Badge>
-          ))}
-        </div>
-        <div className="flex h-12 shrink-0 items-end gap-1" aria-label="Recent PPR trend">
-          {player.trend.length > 0 ? trendBars(player) : <span className="text-xs text-muted-foreground">No trend</span>}
+        <div className="flex items-end justify-between gap-4 border-t border-border/70 pt-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="font-medium uppercase tracking-normal">Recent form</span>
+              {average != null ? <span>{formatNumber(average, 1)} avg over last {player.trend.length} weeks</span> : <span>Unavailable</span>}
+              {totalPoints != null ? <span>{formatNumber(totalPoints, 1)} season pts</span> : null}
+            </div>
+          </div>
+          <div className="flex h-12 shrink-0 items-end gap-1" aria-label="Recent fantasy trend">
+            {player.trend.length > 0 ? trendBars(player, tone.bar) : <span className="text-xs text-muted-foreground">No trend</span>}
+          </div>
         </div>
       </div>
     </article>
   );
 }
 
-export function PlayerBrowser() {
+export function PlayerBrowser({ initialQuery }: { initialQuery?: PlayerBrowserInitialQuery }) {
   const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState("ALL");
   const [sort, setSort] = useState<PlayerListQuery["sort"]>("production");
-  const [rosteredOnly, setRosteredOnly] = useState(false);
+  const [rosteredOnly, setRosteredOnly] = useState(() => initialQuery?.rostered ?? false);
   const [fantasyRelevant, setFantasyRelevant] = useState(false);
   const [injuredOnly, setInjuredOnly] = useState(false);
   const [ageIndex, setAgeIndex] = useState(0);
-  const [activeLeagueId, setActiveLeagueId] = useState("");
-  const [activeRosterId, setActiveRosterId] = useState("");
+  const [activeLeagueId, setActiveLeagueId] = useState(() => initialQuery?.leagueId ?? "");
+  const [activeRosterId, setActiveRosterId] = useState(() => initialQuery?.rosterId ?? "");
   const [activeSeason, setActiveSeason] = useState("");
   const deferredQuery = useDeferredValue(query);
   const ageFilter = ageOptions[ageIndex] ?? ageOptions[0];
@@ -197,6 +356,19 @@ export function PlayerBrowser() {
       ? activeRosterId
       : "";
   const activeRoster = activeLeague?.rosters.find((roster) => String(roster.rosterId) === selectedRosterId) ?? null;
+
+  const leagueRosterRefreshQuery = useQuery({
+    queryKey: ["sleeper-league-refresh", "player-browser", selectedLeagueId],
+    queryFn: async () => {
+      const job = await apiClient.queueSleeperImport({ leagueId: selectedLeagueId, scope: "league" });
+      await apiClient.runQueuedImports();
+      return job;
+    },
+    enabled: Boolean(selectedLeagueId),
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
 
   const scoringMutation = useMutation({
     mutationFn: ({ leagueId, value }: { leagueId: string; value: 0 | 0.5 | 1 }) =>
@@ -246,6 +418,14 @@ export function PlayerBrowser() {
     queryFn: () => apiClient.players(playerQuery),
     retry: false,
   });
+
+  useEffect(() => {
+    if (leagueRosterRefreshQuery.isSuccess) {
+      void queryClient.invalidateQueries({ queryKey: ["leagues"] });
+      void queryClient.invalidateQueries({ queryKey: ["players"] });
+    }
+  }, [leagueRosterRefreshQuery.isSuccess, leagueRosterRefreshQuery.dataUpdatedAt, queryClient]);
+
   const players = playersQuery.data?.items ?? [];
   const total = playersQuery.data?.pagination.total ?? 0;
   const availableSeasons = playersQuery.data?.availableSeasons ?? [];
@@ -297,6 +477,12 @@ export function PlayerBrowser() {
             <p className="text-sm leading-6 text-muted-foreground">
               Sleeper scoring is used when the league exposes reception points. Set a local profile fallback only when that value is missing.
             </p>
+            {leagueRosterRefreshQuery.isPending ? (
+              <p className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
+                Updating league roster data
+              </p>
+            ) : null}
           </div>
           <PprScoringControl
             league={activeLeague}
