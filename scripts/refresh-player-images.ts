@@ -22,21 +22,10 @@ function hasFlag(name: string) {
   return process.argv.includes(name);
 }
 
-function numberArg(name: string) {
-  const index = process.argv.indexOf(name);
-  if (index === -1) {
-    return undefined;
-  }
-
-  const value = Number(process.argv[index + 1]);
-  return Number.isFinite(value) ? value : undefined;
-}
-
 async function main() {
   const { refreshPlayerImages } = await import("@/server/players/images");
   const result = await refreshPlayerImages({
     force: hasFlag("--force"),
-    concurrency: numberArg("--concurrency"),
   });
 
   console.log(

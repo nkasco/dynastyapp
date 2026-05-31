@@ -86,7 +86,7 @@ describe("API boundary", () => {
             status: "Active",
             age: 29,
             fantasyPositions: ["QB"],
-            imageUrl: "/api/player-images/headshots/3139477.png",
+            imageUrl: "/api/player-images/headshots/00-0033873.jpg",
             rosterExposure: {
               rosteredCount: 1,
               leagueCount: 1,
