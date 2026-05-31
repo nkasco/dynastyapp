@@ -16,7 +16,7 @@ import {
   weeklyStats,
 } from "@/server/db/schema";
 import { ApiError } from "@/server/api/errors";
-import { cachedPlayerImageIds, espnIdFromMetadata, localPlayerImageUrl } from "@/server/players/images";
+import { cachedPlayerImageIds, gsisIdsForSleeperPlayers, localPlayerImageUrl } from "@/server/players/images";
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
@@ -198,9 +198,8 @@ function mapPlayer(input: {
   trend: TrendPoint[];
   draftInfo: DraftInfo | null;
   cachedImageIds: Set<string>;
+  gsisId: string | null;
 }) {
-  const espnId = espnIdFromMetadata(input.row.metadata);
-
   return {
     sleeperPlayerId: input.row.sleeperPlayerId,
     fullName: input.row.fullName,
@@ -211,7 +210,7 @@ function mapPlayer(input: {
     status: input.row.status,
     age: input.row.age,
     fantasyPositions: input.row.fantasyPositions,
-    imageUrl: espnId && input.cachedImageIds.has(espnId) ? localPlayerImageUrl(espnId) : null,
+    imageUrl: input.gsisId && input.cachedImageIds.has(input.gsisId) ? localPlayerImageUrl(input.gsisId) : null,
     rosterExposure: input.exposure,
     seasonSummary: input.summary,
     trend: input.trend,
@@ -330,6 +329,7 @@ async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId: string
   const trendMap = new Map<string, TrendPoint[]>();
   const draftInfoMap = new Map<string, DraftInfo>();
   const cachedImageIds = await cachedPlayerImageIds();
+  const gsisIdMap = await gsisIdsForSleeperPlayers(playerIds);
 
   for (const row of rows) {
     exposureMap.set(row.sleeperPlayerId, { rosteredCount: 0, leagueCount: 0, labels: [] });
@@ -489,6 +489,7 @@ async function enrichPlayers(rows: PlayerRow[], userId: string, leagueId: string
       trend: [...(trendMap.get(row.sleeperPlayerId) ?? [])].reverse(),
       draftInfo: draftInfoMap.get(row.sleeperPlayerId) ?? null,
       cachedImageIds,
+      gsisId: gsisIdMap.get(row.sleeperPlayerId) ?? null,
     }),
   );
 }

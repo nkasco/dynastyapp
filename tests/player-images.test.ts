@@ -2,86 +2,97 @@ import { mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { db } from "@/server/db/client";
+import { appSettings } from "@/server/db/schema";
 import {
-  buildEspnHeadshotUrl,
-  espnIdFromMetadata,
+  gsisIdFromMetadata,
   localPlayerImageUrl,
+  playerHeadshotsZipUrl,
   refreshPlayerImages,
 } from "@/server/players/images";
+import { eq } from "drizzle-orm";
 
-function pngResponse(body = new Uint8Array([137, 80, 78, 71]), init?: ResponseInit) {
+const PLAYER_IMAGES_SETTING_KEY = "playerImages.gsisHeadshots.lastRefreshedAt";
+
+afterEach(async () => {
+  await db.delete(appSettings).where(eq(appSettings.key, PLAYER_IMAGES_SETTING_KEY));
+});
+
+function zipResponse(body = new Uint8Array([80, 75, 3, 4]), init?: ResponseInit) {
   return new Response(body, {
     status: 200,
-    headers: { "content-type": "image/png" },
+    headers: { "content-type": "application/zip" },
     ...init,
   });
 }
 
 describe("player image cache", () => {
-  it("builds ESPN headshot URLs from Sleeper metadata IDs", () => {
-    expect(espnIdFromMetadata({ espn_id: "3918298" })).toBe("3918298");
-    expect(espnIdFromMetadata({ espn_id: 3918298 })).toBe("3918298");
-    expect(espnIdFromMetadata({ espn_id: "not-valid" })).toBeNull();
+  it("builds local GSIS headshot URLs", () => {
+    expect(gsisIdFromMetadata({ gsis_id: "00-0023459" })).toBe("00-0023459");
+    expect(gsisIdFromMetadata({ gsis_id: "not-valid" })).toBeNull();
 
-    expect(buildEspnHeadshotUrl("3918298")).toBe(
-      "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/3918298.png&w=350&h=254",
-    );
-    expect(localPlayerImageUrl("3918298")).toBe("/api/player-images/headshots/3918298.png");
+    expect(playerHeadshotsZipUrl()).toBe("https://www.nflgsis.com/statsinabox/CurrentRelease/Headshots.zip");
+    expect(localPlayerImageUrl("00-0023459")).toBe("/api/player-images/headshots/00-0023459.jpg");
   });
 
-  it("downloads multiple missing images and skips any image already cached", async () => {
+  it("downloads the GSIS archive and extracts matching headshots", async () => {
     const imageRoot = await mkdtemp(path.join(tmpdir(), "dynalytics-player-images-"));
-    const cachedPath = path.join(imageRoot, "222.png");
-    await writeFile(cachedPath, new Uint8Array([1, 2, 3]));
+    const cachedPath = path.join(imageRoot, "00-0022222.jpg");
+    await writeFile(cachedPath, new Uint8Array([255, 216, 255]));
 
-    const fetcher = vi.fn(async () => pngResponse());
+    const fetcher = vi.fn(async () => zipResponse());
+    const extractor = vi.fn(async () => {
+      await writeFile(path.join(imageRoot, "00-0011111.jpg"), new Uint8Array([255, 216, 255, 217]));
+      await writeFile(path.join(imageRoot, "00-0033333.jpg"), new Uint8Array([255, 216, 255, 217]));
+      return { extracted: 2, skippedExisting: 1, ignored: 1, warnings: [] };
+    });
 
     const result = await refreshPlayerImages({
       imageRoot,
-      concurrency: 2,
+      force: true,
       fetcher,
+      extractor,
       players: [
-        { sleeperPlayerId: "p1", fullName: "Josh Allen", metadata: { espn_id: "111" } },
-        { sleeperPlayerId: "p2", fullName: "Bijan Robinson", metadata: { espn_id: "222" } },
+        { sleeperPlayerId: "p1", fullName: "Aaron Rodgers", metadata: { gsis_id: "00-0023459" } },
+        { sleeperPlayerId: "p2", fullName: "Josh Allen", metadata: { gsis_id: "00-0034857" } },
         { sleeperPlayerId: "p3", fullName: "Mystery Player", metadata: {} },
-        { sleeperPlayerId: "p4", fullName: "CeeDee Lamb", metadata: { espn_id: "333" } },
       ],
     });
 
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    await expect(stat(path.join(imageRoot, "111.png"))).resolves.toMatchObject({ size: 4 });
-    await expect(stat(path.join(imageRoot, "333.png"))).resolves.toMatchObject({ size: 4 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith("https://www.nflgsis.com/statsinabox/CurrentRelease/Headshots.zip");
+    expect(extractor).toHaveBeenCalledTimes(1);
+    await expect(stat(path.join(imageRoot, "00-0011111.jpg"))).resolves.toMatchObject({ size: 4 });
+    await expect(stat(path.join(imageRoot, "00-0033333.jpg"))).resolves.toMatchObject({ size: 4 });
+    await expect(stat(cachedPath)).resolves.toMatchObject({ size: 3 });
     expect(result.counts).toMatchObject({
-      playersScanned: 4,
-      imagesDownloaded: 2,
+      playersScanned: 3,
+      playersWithGsisId: 2,
+      imagesExtracted: 2,
       imagesSkippedCached: 1,
-      playersWithoutEspnId: 1,
+      playersWithoutGsisId: 1,
+      archivesDownloaded: 1,
     });
     expect(result.warnings).toEqual([]);
   });
 
-  it("keeps going when an individual ESPN image is unavailable", async () => {
+  it("reports archive download failures", async () => {
     const imageRoot = await mkdtemp(path.join(tmpdir(), "dynalytics-player-images-"));
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(new Response("not found", { status: 404 }))
-      .mockResolvedValueOnce(pngResponse());
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response("not found", { status: 404 }));
 
     const result = await refreshPlayerImages({
       imageRoot,
-      concurrency: 2,
+      force: true,
       fetcher,
       players: [
-        { sleeperPlayerId: "p1", fullName: "Missing Player", metadata: { espn_id: "404" } },
-        { sleeperPlayerId: "p2", fullName: "Good Player", metadata: { espn_id: "200" } },
+        { sleeperPlayerId: "p1", fullName: "Aaron Rodgers", metadata: { gsis_id: "00-0023459" } },
       ],
     });
 
-    expect(result.counts.imagesFailed).toBe(1);
-    expect(result.counts.imagesDownloaded).toBe(1);
-    expect(result.status).toBe("partial");
-    expect(result.warnings[0]).toContain("Missing Player");
+    expect(result.counts.archivesDownloaded).toBe(0);
+    expect(result.status).toBe("failed");
+    expect(result.warnings[0]).toContain("HTTP 404");
   });
 });

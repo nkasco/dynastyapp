@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     await requireApiUser();
     const { id } = await params;
-    const normalizedId = id.replace(/\.png$/i, "");
+    const normalizedId = id.replace(/\.(?:jpg|png)$/i, "");
     const filePath = playerImagePath(normalizedId);
 
     if (!filePath) {
@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return new Response(image, {
       headers: {
         "cache-control": "private, max-age=86400",
-        "content-type": "image/png",
+        "content-type": "image/jpeg",
       },
     });
   } catch (error) {

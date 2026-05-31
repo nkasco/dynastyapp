@@ -1,18 +1,22 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 
-import { asc } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/server/db/client";
-import { players } from "@/server/db/schema";
+import { appSettings, playerSourceIds, players } from "@/server/db/schema";
 
-const ESPN_HEADSHOT_BASE_URL = "https://a.espncdn.com/combiner/i";
+const NFL_GSIS_HEADSHOTS_URL = "https://www.nflgsis.com/statsinabox/CurrentRelease/Headshots.zip";
 const DEFAULT_IMAGE_ROOT = path.join(process.cwd(), "data", "player-images", "headshots");
-const DEFAULT_CONCURRENCY = 8;
+const DEFAULT_REFRESH_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_WARNINGS = 25;
+const LAST_REFRESHED_SETTING_KEY = "playerImages.gsisHeadshots.lastRefreshedAt";
+const execFileAsync = promisify(execFile);
 
 type PlayerImageCandidate = {
   sleeperPlayerId: string;
@@ -24,41 +28,46 @@ type RefreshPlayerImagesOptions = {
   imageRoot?: string;
   fetcher?: typeof fetch;
   players?: PlayerImageCandidate[];
-  concurrency?: number;
   force?: boolean;
   maxWarnings?: number;
+  now?: Date;
+  refreshIntervalMs?: number;
+  zipUrl?: string;
+  extractor?: (input: { zipPath: string; imageRoot: string; force: boolean }) => Promise<ExtractHeadshotsResult>;
 };
 
-type ImageDownloadResult =
-  | { status: "downloaded" }
-  | { status: "skippedCached" }
-  | { status: "failed"; warning: string };
+type ExtractHeadshotsResult = {
+  extracted: number;
+  skippedExisting: number;
+  ignored: number;
+  warnings: string[];
+};
 
-export function espnIdFromMetadata(metadata: Record<string, unknown> | null | undefined) {
-  const value = metadata?.espn_id;
+export function gsisIdFromMetadata(metadata: Record<string, unknown> | null | undefined) {
+  const value = metadata?.gsis_id;
   const id = typeof value === "number" ? String(value) : typeof value === "string" ? value : null;
 
-  return id && /^\d+$/.test(id) ? id : null;
+  return id && /^\d{2}-\d{7}$/.test(id) ? id : null;
 }
 
-export function buildEspnHeadshotUrl(espnId: string) {
-  return `${ESPN_HEADSHOT_BASE_URL}?img=/i/headshots/nfl/players/full/${espnId}.png&w=350&h=254`;
+export function playerHeadshotsZipUrl() {
+  return NFL_GSIS_HEADSHOTS_URL;
 }
 
-export function localPlayerImageUrl(espnId: string) {
-  return `/api/player-images/headshots/${espnId}.png`;
+export function localPlayerImageUrl(gsisId: string) {
+  return `/api/player-images/headshots/${gsisId}.jpg`;
 }
 
 export function playerImageRoot() {
   return DEFAULT_IMAGE_ROOT;
 }
 
-export function playerImagePath(espnId: string, imageRoot = DEFAULT_IMAGE_ROOT) {
-  if (!/^\d+$/.test(espnId)) {
+export function playerImagePath(gsisId: string, imageRoot = DEFAULT_IMAGE_ROOT) {
+  if (!/^\d{2}-\d{7}$/.test(gsisId)) {
     return null;
   }
 
-  return path.join(imageRoot, `${espnId}.png`);
+  return path.join(imageRoot, `${gsisId}.jpg`);
 }
 
 async function fileExists(filePath: string) {
@@ -85,68 +94,8 @@ async function loadPlayerImageCandidates() {
     .orderBy(asc(players.fullName));
 }
 
-async function mapWithConcurrency<TItem, TResult>(
-  items: TItem[],
-  concurrency: number,
-  worker: (item: TItem) => Promise<TResult>,
-) {
-  const results: TResult[] = [];
-  let nextIndex = 0;
-
-  async function runWorker() {
-    while (nextIndex < items.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      results[index] = await worker(items[index]!);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runWorker));
-  return results;
-}
-
-async function downloadImage(input: {
-  espnId: string;
-  fullName: string;
-  imageRoot: string;
-  fetcher: typeof fetch;
-  force: boolean;
-}): Promise<ImageDownloadResult> {
-  const filePath = playerImagePath(input.espnId, input.imageRoot);
-
-  if (!filePath) {
-    return { status: "failed", warning: `${input.fullName} has an invalid ESPN image id.` };
-  }
-
-  if (!input.force && (await fileExists(filePath))) {
-    return { status: "skippedCached" };
-  }
-
-  const response = await input.fetcher(buildEspnHeadshotUrl(input.espnId));
-
-  if (!response.ok) {
-    return { status: "failed", warning: `${input.fullName} ESPN image returned HTTP ${response.status}.` };
-  }
-
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("image/")) {
-    return { status: "failed", warning: `${input.fullName} ESPN image returned ${contentType || "unknown content"}.` };
-  }
-
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.length === 0) {
-    return { status: "failed", warning: `${input.fullName} ESPN image was empty.` };
-  }
-
-  const tmpPath = path.join(input.imageRoot, `.${input.espnId}.${randomUUID()}.tmp`);
-  await writeFile(tmpPath, bytes);
-  await rename(tmpPath, filePath);
-
-  return { status: "downloaded" };
-}
-
-export async function playerImageExists(espnId: string, imageRoot = DEFAULT_IMAGE_ROOT) {
-  const filePath = playerImagePath(espnId, imageRoot);
+export async function playerImageExists(gsisId: string, imageRoot = DEFAULT_IMAGE_ROOT) {
+  const filePath = playerImagePath(gsisId, imageRoot);
   if (!filePath) {
     return false;
   }
@@ -168,7 +117,7 @@ export async function cachedPlayerImageIds(imageRoot = DEFAULT_IMAGE_ROOT) {
     const entries = await readdir(imageRoot);
     return new Set(
       entries.flatMap((entry) => {
-        const match = /^(\d+)\.png$/i.exec(entry);
+        const match = /^(\d{2}-\d{7})\.jpg$/i.exec(entry);
         return match?.[1] ? [match[1]] : [];
       }),
     );
@@ -181,69 +130,224 @@ export async function cachedPlayerImageIds(imageRoot = DEFAULT_IMAGE_ROOT) {
   }
 }
 
+async function appSettingDate(key: string) {
+  const row = await db.query.appSettings.findFirst({ where: eq(appSettings.key, key) });
+  const value = row?.value;
+
+  if (!value || typeof value !== "object" || !("refreshedAt" in value) || typeof value.refreshedAt !== "string") {
+    return null;
+  }
+
+  const date = new Date(value.refreshedAt);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function setAppSetting(key: string, value: unknown) {
+  await db
+    .insert(appSettings)
+    .values({ key, value })
+    .onConflictDoUpdate({
+      target: appSettings.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
+
+function isFresh(lastRefreshedAt: Date | null, now: Date, refreshIntervalMs: number) {
+  return Boolean(lastRefreshedAt && now.getTime() - lastRefreshedAt.getTime() < refreshIntervalMs);
+}
+
+async function extractHeadshotsWithUnzip(input: {
+  zipPath: string;
+  imageRoot: string;
+  force: boolean;
+}): Promise<ExtractHeadshotsResult> {
+  const tmpRoot = path.join(input.imageRoot, `.extract-${randomUUID()}`);
+  await mkdir(tmpRoot, { recursive: true });
+
+  try {
+    await execFileAsync("unzip", ["-qq", input.zipPath, "-d", tmpRoot], { maxBuffer: 1024 * 1024 });
+    const entries = await readdir(tmpRoot, { recursive: true, withFileTypes: true });
+    const warnings: string[] = [];
+    let extracted = 0;
+    let skippedExisting = 0;
+    let ignored = 0;
+
+    for (const entry of entries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const match = /^(\d{2}-\d{7})_headshot\.jpg$/i.exec(entry.name);
+      if (!match?.[1]) {
+        ignored += 1;
+        continue;
+      }
+
+      const targetPath = playerImagePath(match[1], input.imageRoot);
+      if (!targetPath) {
+        ignored += 1;
+        continue;
+      }
+
+      if (!input.force && (await fileExists(targetPath))) {
+        skippedExisting += 1;
+        continue;
+      }
+
+      const sourcePath = path.join(entry.parentPath, entry.name);
+      const tmpTargetPath = path.join(input.imageRoot, `.${match[1]}.${randomUUID()}.tmp`);
+      await rename(sourcePath, tmpTargetPath);
+      await rename(tmpTargetPath, targetPath);
+      extracted += 1;
+    }
+
+    return { extracted, skippedExisting, ignored, warnings };
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+}
+
 export async function refreshPlayerImages(options: RefreshPlayerImagesOptions = {}) {
   const imageRoot = options.imageRoot ?? DEFAULT_IMAGE_ROOT;
   const fetcher = options.fetcher ?? fetch;
   const force = options.force ?? false;
   const maxWarnings = options.maxWarnings ?? DEFAULT_MAX_WARNINGS;
+  const now = options.now ?? new Date();
+  const refreshIntervalMs = options.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
+  const zipUrl = options.zipUrl ?? NFL_GSIS_HEADSHOTS_URL;
+  const extractor = options.extractor ?? extractHeadshotsWithUnzip;
   const candidates = options.players ?? (await loadPlayerImageCandidates());
-  const concurrency = Math.max(1, Math.floor(options.concurrency ?? DEFAULT_CONCURRENCY));
   const warnings: string[] = [];
   const counts = {
     playersScanned: candidates.length,
-    playersWithEspnId: 0,
-    playersWithoutEspnId: 0,
-    imagesDownloaded: 0,
+    playersWithGsisId: 0,
+    playersWithoutGsisId: 0,
+    imagesExtracted: 0,
     imagesSkippedCached: 0,
-    imagesFailed: 0,
+    archiveFilesIgnored: 0,
+    archivesDownloaded: 0,
+    refreshesSkippedFresh: 0,
   };
 
   await mkdir(imageRoot, { recursive: true });
 
-  const withEspnIds = candidates.flatMap((player) => {
-    const espnId = espnIdFromMetadata(player.metadata);
-    if (!espnId) {
-      counts.playersWithoutEspnId += 1;
-      return [];
-    }
-
-    counts.playersWithEspnId += 1;
-    return [{ ...player, espnId }];
-  });
-
-  const results = await mapWithConcurrency(withEspnIds, concurrency, (player) =>
-    downloadImage({
-      espnId: player.espnId,
-      fullName: player.fullName,
-      imageRoot,
-      fetcher,
-      force,
-    }),
-  );
-
-  for (const result of results) {
-    if (result.status === "downloaded") {
-      counts.imagesDownloaded += 1;
-    } else if (result.status === "skippedCached") {
-      counts.imagesSkippedCached += 1;
+  for (const player of candidates) {
+    const gsisId = gsisIdFromMetadata(player.metadata);
+    if (!gsisId) {
+      counts.playersWithoutGsisId += 1;
     } else {
-      counts.imagesFailed += 1;
-      if (warnings.length < maxWarnings) {
-        warnings.push(result.warning);
-      }
+      counts.playersWithGsisId += 1;
     }
   }
 
-  return {
-    status: counts.imagesFailed > 0 ? ("partial" as const) : ("succeeded" as const),
-    counts,
-    warnings,
-    metadata: {
+  const lastRefreshedAt = await appSettingDate(LAST_REFRESHED_SETTING_KEY);
+  if (!force && isFresh(lastRefreshedAt, now, refreshIntervalMs)) {
+    counts.refreshesSkippedFresh = 1;
+
+    return {
+      status: "succeeded" as const,
+      counts,
+      warnings,
+      metadata: {
+        imageRoot,
+        source: "nfl-gsis",
+        zipUrl,
+        cachePolicy: "fresh-cache",
+        refreshIntervalDays: Math.round(refreshIntervalMs / (24 * 60 * 60 * 1000)),
+        lastRefreshedAt: lastRefreshedAt?.toISOString() ?? null,
+        force,
+      },
+    };
+  }
+
+  const response = await fetcher(zipUrl);
+
+  if (!response.ok) {
+    return {
+      status: "failed" as const,
+      counts,
+      warnings: [`NFL GSIS headshot archive returned HTTP ${response.status}.`],
+      metadata: {
+        imageRoot,
+        source: "nfl-gsis",
+        zipUrl,
+        cachePolicy: force ? "replace-existing" : "missing-only",
+        refreshIntervalDays: Math.round(refreshIntervalMs / (24 * 60 * 60 * 1000)),
+        lastRefreshedAt: lastRefreshedAt?.toISOString() ?? null,
+        force,
+      },
+    };
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length === 0) {
+    return {
+      status: "failed" as const,
+      counts,
+      warnings: ["NFL GSIS headshot archive was empty."],
+      metadata: {
+        imageRoot,
+        source: "nfl-gsis",
+        zipUrl,
+        cachePolicy: force ? "replace-existing" : "missing-only",
+        refreshIntervalDays: Math.round(refreshIntervalMs / (24 * 60 * 60 * 1000)),
+        lastRefreshedAt: lastRefreshedAt?.toISOString() ?? null,
+        force,
+      },
+    };
+  }
+
+  const zipPath = path.join(imageRoot, `.Headshots.${randomUUID()}.zip`);
+  await writeFile(zipPath, bytes);
+  counts.archivesDownloaded = 1;
+
+  try {
+    const result = await extractor({ zipPath, imageRoot, force });
+    counts.imagesExtracted = result.extracted;
+    counts.imagesSkippedCached = result.skippedExisting;
+    counts.archiveFilesIgnored = result.ignored;
+    warnings.push(...result.warnings.slice(0, maxWarnings));
+
+    await setAppSetting(LAST_REFRESHED_SETTING_KEY, {
+      refreshedAt: now.toISOString(),
+      zipUrl,
       imageRoot,
-      source: "espn",
-      cachePolicy: force ? "replace-existing" : "missing-only",
-      concurrency,
-      force,
-    },
-  };
+      imagesExtracted: result.extracted,
+      imagesSkippedCached: result.skippedExisting,
+      archiveFilesIgnored: result.ignored,
+    });
+
+    return {
+      status: warnings.length > 0 ? ("partial" as const) : ("succeeded" as const),
+      counts,
+      warnings,
+      metadata: {
+        imageRoot,
+        source: "nfl-gsis",
+        zipUrl,
+        cachePolicy: force ? "replace-existing" : "missing-only",
+        refreshIntervalDays: Math.round(refreshIntervalMs / (24 * 60 * 60 * 1000)),
+        lastRefreshedAt: lastRefreshedAt?.toISOString() ?? null,
+        force,
+      },
+    };
+  } finally {
+    await rm(zipPath, { force: true });
+  }
+}
+
+export async function gsisIdsForSleeperPlayers(sleeperPlayerIds: string[]) {
+  if (sleeperPlayerIds.length === 0) {
+    return new Map<string, string>();
+  }
+
+  const rows = await db
+    .select({
+      sleeperPlayerId: playerSourceIds.sleeperPlayerId,
+      gsisId: playerSourceIds.sourcePlayerId,
+    })
+    .from(playerSourceIds)
+    .where(and(eq(playerSourceIds.source, "gsis"), inArray(playerSourceIds.sleeperPlayerId, sleeperPlayerIds)));
+
+  return new Map(rows.map((row) => [row.sleeperPlayerId, row.gsisId] as const));
 }

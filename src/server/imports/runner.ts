@@ -5,8 +5,9 @@ import { and, asc, count, eq, isNull, lte, ne } from "drizzle-orm";
 import { env } from "@/env";
 import { db } from "@/server/db/client";
 import { importJobs, importLocks, leagues, warningQueue, type ImportJob, type NewImportJob } from "@/server/db/schema";
-import { importSleeperJob } from "@/server/sleeper/service";
 import { importNflverseJob } from "@/server/nflverse/service";
+import { refreshPlayerImages } from "@/server/players/images";
+import { importSleeperJob } from "@/server/sleeper/service";
 
 type ImportCounts = Record<string, number>;
 type ImportMetadata = Record<string, unknown>;
@@ -450,6 +451,7 @@ export async function runNightlyRefresh(options: RunQueuedOptions = {}) {
     });
 
     const jobs = await enqueueNightlySourceJobs();
+    const playerImages = await refreshPlayerImages();
     const results = await runQueuedImportJobs(options);
     const statusCounts = results.reduce<Record<string, number>>((countsByStatus, result) => {
       const status = result?.status ?? "unknown";
@@ -458,9 +460,10 @@ export async function runNightlyRefresh(options: RunQueuedOptions = {}) {
     }, {});
     const failed = statusCounts.failed ?? 0;
     const partial = statusCounts.partial ?? 0;
+    const imageRefreshHadWarning = playerImages.status !== "succeeded";
 
     await markImportJob(parentJob.id, {
-      status: failed > 0 || partial > 0 ? "partial" : "succeeded",
+      status: failed > 0 || partial > 0 || imageRefreshHadWarning ? "partial" : "succeeded",
       endedAt: now(),
       counts: {
         jobsQueued: jobs.length,
@@ -468,12 +471,13 @@ export async function runNightlyRefresh(options: RunQueuedOptions = {}) {
         jobsSucceeded: statusCounts.succeeded ?? 0,
         jobsPartial: partial,
         jobsFailed: failed,
-        warnings: failed + partial,
+        warnings: failed + partial + (imageRefreshHadWarning ? 1 : 0),
       },
       error: failed > 0 ? `${failed} import job(s) failed during nightly refresh.` : null,
       metadata: metadataWith(parentJob.metadata, {
         lockKey,
         childJobIds: jobs.map((job) => job.id),
+        playerImages,
       }),
     });
   } catch (error) {
