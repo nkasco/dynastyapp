@@ -290,6 +290,35 @@ export const rosterPlayers = sqliteTable(
   ],
 );
 
+export const playerWatchlists = sqliteTable(
+  "player_watchlists",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    sleeperPlayerId: text("sleeper_player_id")
+      .notNull()
+      .references(() => players.sleeperPlayerId, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("player_watchlists_user_league_player_unique").on(
+      table.userId,
+      table.leagueId,
+      table.sleeperPlayerId,
+    ),
+    index("player_watchlists_user_league_idx").on(table.userId, table.leagueId),
+    index("player_watchlists_player_idx").on(table.sleeperPlayerId),
+  ],
+);
+
 export const matchups = sqliteTable(
   "matchups",
   {
@@ -595,6 +624,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   sessions: many(sessions),
   localCredential: one(localCredentials),
   teams: many(userLeagueTeams),
+  watchlistItems: many(playerWatchlists),
   tradeScenarios: many(tradeScenarios),
 }));
 
@@ -604,11 +634,13 @@ export const leaguesRelations = relations(leagues, ({ many }) => ({
   matchups: many(matchups),
   transactions: many(transactions),
   tradedPicks: many(tradedPicks),
+  watchlistItems: many(playerWatchlists),
 }));
 
 export const playersRelations = relations(players, ({ many }) => ({
   sourceIds: many(playerSourceIds),
   rosterSpots: many(rosterPlayers),
+  watchlistItems: many(playerWatchlists),
   weeklyStats: many(weeklyStats),
   seasonStats: many(seasonStats),
 }));
@@ -618,6 +650,8 @@ export type NewUser = typeof users.$inferInsert;
 export type Player = typeof players.$inferSelect;
 export type NewPlayer = typeof players.$inferInsert;
 export type League = typeof leagues.$inferSelect;
+export type PlayerWatchlist = typeof playerWatchlists.$inferSelect;
+export type NewPlayerWatchlist = typeof playerWatchlists.$inferInsert;
 export type NewLeague = typeof leagues.$inferInsert;
 export type ImportJob = typeof importJobs.$inferSelect;
 export type NewImportJob = typeof importJobs.$inferInsert;

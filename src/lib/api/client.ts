@@ -18,6 +18,7 @@ import {
   playersResponseSchema,
   tradeEvaluationResponseSchema,
   updateLeagueSettingsRequestSchema,
+  removedWatchlistItemResponseSchema,
   type ApiFailure,
   type CreateNflverseImportRequest,
   type CreateSleeperImportRequest,
@@ -27,6 +28,11 @@ import {
   type LeaguePreviewQuery,
   type PlayerListQuery,
   type UpdateLeagueSettingsRequest,
+  type WatchlistPlayerRequest,
+  watchlistItemResponseSchema,
+  watchlistPlayerRequestSchema,
+  watchlistQuerySchema,
+  watchlistResponseSchema,
 } from "@/contracts";
 
 type ApiData<TSchema extends z.ZodType> = Extract<z.output<TSchema>, { ok: true }> extends { data: infer TData }
@@ -123,4 +129,19 @@ export const apiClient = {
       method: "POST",
       body: body(evaluateTradeRequestSchema, input),
     }),
+  watchlist: (leagueId: string) =>
+    apiFetch(`/api/watchlists${queryString(watchlistQuerySchema.parse({ leagueId }))}`, watchlistResponseSchema),
+  addWatchlistPlayer: (input: WatchlistPlayerRequest) =>
+    apiFetch("/api/watchlists", watchlistItemResponseSchema, {
+      method: "POST",
+      body: body(watchlistPlayerRequestSchema, input),
+    }),
+  removeWatchlistPlayer: (input: WatchlistPlayerRequest) =>
+    apiFetch(
+      `/api/watchlists${queryString(watchlistPlayerRequestSchema.parse(input))}`,
+      removedWatchlistItemResponseSchema,
+      {
+        method: "DELETE",
+      },
+    ),
 };

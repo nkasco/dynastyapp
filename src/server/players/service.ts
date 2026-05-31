@@ -23,6 +23,7 @@ function toIso(value: Date | null) {
 }
 
 const FANTASY_POSITIONS = new Set(["QB", "RB", "WR", "TE"]);
+const FANTASY_FLEX_POSITIONS = new Set(["RB", "WR", "TE"]);
 
 type PlayerRow = typeof players.$inferSelect;
 type RosterExposure = {
@@ -240,7 +241,8 @@ function playerWhere(query: PlayerListQuery) {
   }
 
   if (query.position) {
-    filters.push(eq(players.position, query.position.toUpperCase()));
+    const position = query.position.toUpperCase();
+    filters.push(position === "FLEX" ? inArray(players.position, Array.from(FANTASY_FLEX_POSITIONS)) : eq(players.position, position));
   }
 
   if (query.team) {

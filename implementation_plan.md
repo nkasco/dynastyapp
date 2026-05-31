@@ -140,23 +140,23 @@ Milestones are embedded after the phase that unlocks the corresponding platform 
 
   **Milestone M6: Player Browser Usable** ✅
 
-- [ ] Phase 10: Player browser refinement and watchlists
-  - [ ] Add database schema and Drizzle migration for profile-and-league-scoped watchlists keyed by user profile, league, and player.
-  - [ ] Ensure watchlists do not conflict when two profiles link the same Sleeper league.
-  - [ ] Add internal watchlist API routes and typed client methods for list, add, and remove operations.
-  - [ ] Add a star control to the right of each player name on the Players page.
-  - [ ] Make the star set and unset that player on the active league's watchlist for the current profile.
-  - [ ] Keep the watchlist tied to the selected league so changing leagues changes the watchlist context.
-  - [ ] Rework confusing Players page filters; remove low-value options and keep only filters with clear decision value.
-  - [ ] Add `Flex` to the position filter as RB/WR/TE.
-  - [ ] Remove the league scoring banner from the Players page.
-  - [ ] Fix the contrast with the "Player browser" badge on the players page so it is readable in dark and light themes.
-  - [ ] Move the "position" and "sort" controls onto their own row, put the filters to the right of those controlsm, remove the half ppr scoring badge that is to the right side of the filters currently. but keep where it says it on each player card (add the badge to the player card before "Half PPR" or whatever setting it is whether it's full ppr, etc. they can all have the badge.)
-  - [ ] Add explicit ascending and descending sort controls, this can be represented by a directional arrow to the right of the selected Sort option that corresponds with aschending or descending, and if you click the sort control again it alternates between the 2.
-  - [ ] Add pagination controls so users can browse beyond the first 36 players.
-  - [ ] Add a full-screen player card overlay opened from card click, with dimmed/blurred backdrop and a chunky framed surface.
-  - [ ] Include clean tabbed or sectioned analytic charts and tables in the player overlay.
-  - [ ] Verify the overlay, filters, sort direction, pagination, and watchlist states on desktop and mobile.
+- [x] Phase 10: Player browser refinement and watchlists
+  - [x] Add database schema and Drizzle migration for profile-and-league-scoped watchlists keyed by user profile, league, and player.
+  - [x] Ensure watchlists do not conflict when two profiles link the same Sleeper league.
+  - [x] Add internal watchlist API routes and typed client methods for list, add, and remove operations.
+  - [x] Add a star control to the right of each player name on the Players page.
+  - [x] Make the star set and unset that player on the active league's watchlist for the current profile.
+  - [x] Keep the watchlist tied to the selected league so changing leagues changes the watchlist context.
+  - [x] Rework confusing Players page filters; remove low-value options and keep only filters with clear decision value.
+  - [x] Add `Flex` to the position filter as RB/WR/TE.
+  - [x] Remove the league scoring banner from the Players page.
+  - [x] Fix the contrast with the "Player browser" badge on the players page so it is readable in dark and light themes.
+  - [x] Move the "position" and "sort" controls onto their own row, put the filters to the right of those controlsm, remove the half ppr scoring badge that is to the right side of the filters currently. but keep where it says it on each player card (add the badge to the player card before "Half PPR" or whatever setting it is whether it's full ppr, etc. they can all have the badge.)
+  - [x] Add explicit ascending and descending sort controls, this can be represented by a directional arrow to the right of the selected Sort option that corresponds with aschending or descending, and if you click the sort control again it alternates between the 2.
+  - [x] Add pagination controls so users can browse beyond the first 36 players.
+  - [x] Add a full-screen player card overlay opened from card click, with dimmed/blurred backdrop and a chunky framed surface.
+  - [x] Include clean tabbed or sectioned analytic charts and tables in the player overlay.
+  - [x] Verify the overlay, filters, sort direction, pagination, and watchlist states on desktop and mobile.
 
   **Milestone M7: Player Browser Refined**
 
